@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -334,6 +334,55 @@
     let lastStatsTime = 0;
     let statsContainer = null;
 
+    // Резервный механизм обнаружения PeerConnection через глобальные объекты Boosteroid.
+    // Если Proxy-перехват конструктора не сработал (adapter.js, CSP, iframe),
+    // мы напрямую обращаемся к объектам, которые Boosteroid создаёт в window.
+    function discoverPeerConnections() {
+        const found = [];
+
+        // 1. Новый WebRTC-движок: WebRtcTransport.streamer.pc
+        try {
+            const wrtPC = window.WebRtcTransport && window.WebRtcTransport.pc;
+            if (wrtPC && (wrtPC.connectionState === 'connected' || wrtPC.iceConnectionState === 'connected')) {
+                found.push(wrtPC);
+            }
+        } catch (e) { }
+
+        // 2. Janus-движок: JANUS_HELPER.streamingVideo.webrtcStuff.pc
+        try {
+            const janusPC = window.JANUS_HELPER &&
+                window.JANUS_HELPER.streamingVideo &&
+                window.JANUS_HELPER.streamingVideo.webrtcStuff &&
+                window.JANUS_HELPER.streamingVideo.webrtcStuff.pc;
+            if (janusPC && (janusPC.connectionState === 'connected' || janusPC.iceConnectionState === 'connected')) {
+                found.push(janusPC);
+            }
+        } catch (e) { }
+
+        return found;
+    }
+
+    // Резервный механизм обнаружения сервера через глобальные объекты Boosteroid
+    function discoverServerFromGlobals() {
+        try {
+            // JANUS_HELPER.server = "https://gw-xxx.boosteroid.com/janus"
+            const janusServer = window.JANUS_HELPER && window.JANUS_HELPER.server;
+            if (janusServer) {
+                const url = new URL(janusServer);
+                checkAndSetServer(url.hostname, janusServer);
+            }
+        } catch (e) { }
+
+        try {
+            // WebRtcTransport.serverBaseUrl = "https://gw-xxx.boosteroid.com/webrtc"
+            const wrtUrl = window.WebRtcTransport && window.WebRtcTransport.serverBaseUrl;
+            if (wrtUrl) {
+                const url = new URL(wrtUrl);
+                checkAndSetServer(url.hostname, wrtUrl);
+            }
+        } catch (e) { }
+    }
+
     async function updateStatsLoop() {
         if (!statsContainer) {
             statsContainer = document.createElement('div');
@@ -352,10 +401,29 @@
             return;
         }
 
+        // Пробуем обнаружить сервер через глобалы Boosteroid (фолбэк)
+        if (!lastServerName && !lastServerIp) {
+            discoverServerFromGlobals();
+        }
+
+        // Собираем все PeerConnection-ы: из Proxy-перехвата + из глобалов Boosteroid
+        const discoveredPCs = discoverPeerConnections();
+        const allPCs = [...peerConnections];
+        for (const dpc of discoveredPCs) {
+            if (!allPCs.includes(dpc)) {
+                allPCs.push(dpc);
+                // Добавляем в основной массив, чтобы не искать заново
+                if (!peerConnections.includes(dpc)) {
+                    peerConnections.push(dpc);
+                    console.log('[Boosteroid Tweaks] 📡 PeerConnection найден через глобалы Boosteroid (фолбэк)');
+                }
+            }
+        }
+
         let activeStats = null;
 
-        // Ищем активное соединение среди всех созданных (Boosteroid может создавать тестовые)
-        for (const pc of peerConnections) {
+        // Ищем активное соединение среди всех найденных
+        for (const pc of allPCs) {
             if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected') {
                 try {
                     const stats = await pc.getStats();
@@ -375,10 +443,6 @@
 
         if (!activeStats) {
             statsContainer.style.display = 'none';
-            // Debug: показываем почему оверлей не работает
-            if (settings.statsMode !== 0 && peerConnections.length === 0) {
-                console.log('[Boosteroid Tweaks] 📊 Stats: нет PeerConnection в массиве. Ожидание подключения...');
-            }
             return;
         }
 
