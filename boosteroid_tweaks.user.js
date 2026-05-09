@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -69,8 +69,11 @@
                 if (isIP && host !== lastServerIp) { lastServerIp = host; changed = true; }
                 if (!isIP && host !== lastServerName) { lastServerName = host; changed = true; }
                 
-                if (changed && window.renderPanelGlobal) {
-                    window.renderPanelGlobal();
+                if (changed) {
+                    console.log(`[Boosteroid Tweaks] 🌍 Обнаружен сервер: ${host} (из ${fullUrl.substring(0, 80)})`);
+                    if (window.renderPanelGlobal) {
+                        window.renderPanelGlobal();
+                    }
                 }
             }
         }
@@ -140,23 +143,55 @@
         return ws;
     };
 
-    // Перехватем также RTCPeerConnection на всякий случай, если сигналинг происходит не по WS, 
-    // но обычно для видео-стримов IP адрес определяется при создании PeerConnection
+    // Перехват RTCPeerConnection через Proxy — прозрачный перехват, который
+    // сохраняет prototype, static методы (generateCertificate) и instanceof.
+    // Это критично для совместимости с adapter.js (WebRTC shim от Google),
+    // который загружается на странице Boosteroid и shimm-ит RTCPeerConnection.
     let peerConnections = [];
     const OriginalRTCPeerConnection = window.RTCPeerConnection;
-    window.RTCPeerConnection = function (configuration) {
-        const pc = new OriginalRTCPeerConnection(configuration);
-        peerConnections.push(pc);
 
-        // Очищаем закрытые соединения для экономии памяти
-        pc.addEventListener('connectionstatechange', () => {
-            if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
-                peerConnections = peerConnections.filter(p => p !== pc);
+    if (OriginalRTCPeerConnection) {
+        window.RTCPeerConnection = new Proxy(OriginalRTCPeerConnection, {
+            construct(target, args) {
+                const pc = new target(...args);
+                peerConnections.push(pc);
+                console.log(`[Boosteroid Tweaks] 📡 RTCPeerConnection создан. Всего активных: ${peerConnections.length}`);
+
+                // Очищаем закрытые соединения для экономии памяти
+                pc.addEventListener('connectionstatechange', () => {
+                    const state = pc.connectionState;
+                    console.log(`[Boosteroid Tweaks] 📡 PeerConnection state: ${state}`);
+                    if (state === 'closed' || state === 'failed') {
+                        peerConnections = peerConnections.filter(p => p !== pc);
+                    }
+                });
+
+                return pc;
+            },
+            apply(target, thisArg, args) {
+                // На случай вызова без new (некоторые shim-ы так делают)
+                return new target(...args);
             }
         });
+    }
 
-        return pc;
-    };
+    // Перехват webkitRTCPeerConnection (для старых браузеров / adapter.js)
+    if (window.webkitRTCPeerConnection && !window.webkitRTCPeerConnection.__btProxied) {
+        const OriginalWebkitRTC = window.webkitRTCPeerConnection;
+        window.webkitRTCPeerConnection = new Proxy(OriginalWebkitRTC, {
+            construct(target, args) {
+                const pc = new target(...args);
+                peerConnections.push(pc);
+                pc.addEventListener('connectionstatechange', () => {
+                    if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                        peerConnections = peerConnections.filter(p => p !== pc);
+                    }
+                });
+                return pc;
+            }
+        });
+        window.webkitRTCPeerConnection.__btProxied = true;
+    }
 
     // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid)
     const originalFetch = window.fetch;
@@ -340,6 +375,10 @@
 
         if (!activeStats) {
             statsContainer.style.display = 'none';
+            // Debug: показываем почему оверлей не работает
+            if (settings.statsMode !== 0 && peerConnections.length === 0) {
+                console.log('[Boosteroid Tweaks] 📊 Stats: нет PeerConnection в массиве. Ожидание подключения...');
+            }
             return;
         }
 
