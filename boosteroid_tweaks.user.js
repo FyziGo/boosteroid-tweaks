@@ -122,14 +122,19 @@
     
     // Перехватем также RTCPeerConnection на всякий случай, если сигналинг происходит не по WS, 
     // но обычно для видео-стримов IP адрес определяется при создании PeerConnection
-    let currentPeerConnection = null;
+    let peerConnections = [];
     const OriginalRTCPeerConnection = window.RTCPeerConnection;
     window.RTCPeerConnection = function(configuration) {
-        // Мы не можем легко заблокировать по IP в RTCPeerConnection до получения ICE кандидатов,
-        // но основное подключение к серверу Boosteroid идёт через WebSocket для сигналинга, 
-        // так что блокировки WS обычно достаточно, чтобы отменить сессию на "плохом" сервере.
         const pc = new OriginalRTCPeerConnection(configuration);
-        currentPeerConnection = pc;
+        peerConnections.push(pc);
+        
+        // Очищаем закрытые соединения для экономии памяти
+        pc.addEventListener('connectionstatechange', () => {
+            if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                peerConnections = peerConnections.filter(p => p !== pc);
+            }
+        });
+        
         return pc;
     };
 
@@ -243,13 +248,39 @@
             document.body.appendChild(statsContainer);
         }
 
-        if (settings.statsMode === 0 || !currentPeerConnection || currentPeerConnection.connectionState !== 'connected') {
+        if (settings.statsMode === 0) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+
+        let activeStats = null;
+
+        // Ищем активное соединение среди всех созданных (Boosteroid может создавать тестовые)
+        for (const pc of peerConnections) {
+            if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected') {
+                try {
+                    const stats = await pc.getStats();
+                    let hasVideoData = false;
+                    stats.forEach(report => {
+                        if (report.type === 'inbound-rtp' && report.kind === 'video' && report.bytesReceived > 0) {
+                            hasVideoData = true;
+                        }
+                    });
+                    if (hasVideoData) {
+                        activeStats = stats;
+                        break;
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if (!activeStats) {
             statsContainer.style.display = 'none';
             return;
         }
 
         try {
-            const stats = await currentPeerConnection.getStats();
+            const stats = activeStats;
             let ping = 0, packetLoss = 0, fps = 0, resolution = '', bytesReceived = 0;
             
             stats.forEach(report => {
