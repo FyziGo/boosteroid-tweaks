@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -50,7 +50,8 @@
         return i18n[currentLang][key] || i18n['en'][key];
     }
 
-    let lastDetectedServer = null;
+    let lastServerName = null;
+    let lastServerIp = null;
 
     // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА И АВТОДЕТЕКТ СЕРВЕРОВ) ===
     
@@ -64,8 +65,11 @@
             const ignoreList = ['cloud.boosteroid.com', 'api.boosteroid.com', 'games.boosteroid.com', 'boosteroid.com', 'mtls.boosteroid.com'];
             
             if (!ignoreList.includes(host) || isStreamApi) {
-                lastDetectedServer = host;
-                if (window.renderPanelGlobal) {
+                let changed = false;
+                if (isIP && host !== lastServerIp) { lastServerIp = host; changed = true; }
+                if (!isIP && host !== lastServerName) { lastServerName = host; changed = true; }
+                
+                if (changed && window.renderPanelGlobal) {
                     window.renderPanelGlobal();
                 }
             }
@@ -363,8 +367,8 @@
                 if (remoteCandidate) {
                     const ip = remoteCandidate.ip || remoteCandidate.address;
                     // Если это реальный IP (не локальный и не пустой), и он отличается от текущего - обновляем
-                    if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastDetectedServer) {
-                        lastDetectedServer = ip;
+                    if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastServerIp) {
+                        lastServerIp = ip;
                         if (window.renderPanelGlobal) window.renderPanelGlobal();
                     }
                 }
@@ -619,9 +623,10 @@
                 <div class="setting-row" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px; background: #2a2a2a; padding: 10px; border-radius: 8px;">
                     <label style="margin-bottom: 5px; font-size: 13px; color: #bbb;">${t('lastServer')}</label>
                     <div style="display: flex; gap: 5px; width: 100%;">
-                        <input type="text" readonly value="${lastDetectedServer || t('waiting')}" style="flex-grow: 1; background: #1a1a1a; border: 1px solid #444; color: #ddd; padding: 5px 10px; border-radius: 6px; outline: none; font-size: 13px;">
-                        <button id="block-last-btn" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; ${!lastDetectedServer || settings.blockedServers.includes(lastDetectedServer) ? 'opacity: 0.5; pointer-events: none;' : ''}">${t('block')}</button>
+                        <input type="text" readonly value="${lastServerName || lastServerIp || t('waiting')}" style="flex-grow: 1; background: #1a1a1a; border: 1px solid #444; color: #ddd; padding: 5px 10px; border-radius: 6px; outline: none; font-size: 13px;">
+                        <button id="block-last-btn" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; ${!(lastServerName || lastServerIp) || settings.blockedServers.includes(lastServerName) || settings.blockedServers.includes(lastServerIp) ? 'opacity: 0.5; pointer-events: none;' : ''}">${t('block')}</button>
                     </div>
+                    ${lastServerIp && lastServerName ? `<div style="font-size: 11px; color: #888; margin-top: 5px; font-family: monospace;">IP: ${lastServerIp}</div>` : ''}
                 </div>
 
                 <div class="server-list-container">
@@ -669,8 +674,9 @@
             const blockLastBtn = panel.querySelector('#block-last-btn');
             if (blockLastBtn) {
                 blockLastBtn.addEventListener('click', () => {
-                    if (lastDetectedServer && !settings.blockedServers.includes(lastDetectedServer)) {
-                        settings.blockedServers.push(lastDetectedServer);
+                    const toBlock = lastServerName || lastServerIp;
+                    if (toBlock && !settings.blockedServers.includes(toBlock)) {
+                        settings.blockedServers.push(toBlock);
                         saveSettings();
                         renderPanel();
                     }
