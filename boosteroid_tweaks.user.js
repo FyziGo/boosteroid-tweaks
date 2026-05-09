@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -52,7 +52,23 @@
 
     let lastDetectedServer = null;
 
-    // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА СЕРВЕРОВ) ===
+    // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА И АВТОДЕТЕКТ СЕРВЕРОВ) ===
+    
+    // Функция для фильтрации служебных доменов Boosteroid
+    const checkAndSetServer = (host) => {
+        if (host && host.includes('boosteroid.com')) {
+            // Игнорируем основные сайты, API и служебные домены
+            const ignoreList = ['cloud.boosteroid.com', 'api.boosteroid.com', 'games.boosteroid.com', 'boosteroid.com', 'mtls.boosteroid.com'];
+            if (!ignoreList.includes(host)) {
+                lastDetectedServer = host;
+                if (window.renderPanelGlobal) {
+                    window.renderPanelGlobal();
+                }
+            }
+        }
+    };
+
+    // 1. Перехват WebSocket
     const OriginalWebSocket = window.WebSocket;
     window.WebSocket = function (url, protocols) {
         const urlObj = new URL(url);
@@ -66,13 +82,7 @@
             throw new Error(`[Boosteroid Tweaks] Connection to ${host} blocked by user settings.`);
         }
 
-        // Автоопределение сервера
-        if (host && host.includes('boosteroid.com')) {
-            lastDetectedServer = host;
-            if (window.renderPanelGlobal) {
-                window.renderPanelGlobal();
-            }
-        }
+        checkAndSetServer(host);
 
         let ws;
         if (protocols === undefined) {
@@ -140,6 +150,50 @@
         return pc;
     };
 
+    // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid)
+    const originalFetch = window.fetch;
+    window.fetch = async function () {
+        try {
+            const req = arguments[0];
+            const url = typeof req === 'string' ? req : (req instanceof Request ? req.url : '');
+            if (url) {
+                const urlObj = new URL(url, window.location.origin);
+                const host = urlObj.hostname;
+                
+                const isBlocked = settings.blockedServers.some(blockedItem => host.includes(blockedItem));
+                if (isBlocked) {
+                    console.warn(`[Boosteroid Tweaks] Заблокирован fetch запрос к: ${host}`);
+                    return Promise.reject(new Error(`[Boosteroid Tweaks] Fetch to ${host} blocked.`));
+                }
+
+                checkAndSetServer(host);
+            }
+        } catch(e) {}
+        return originalFetch.apply(this, arguments);
+    };
+
+    // 4. Перехват XMLHttpRequest (на всякий случай)
+    const OriginalXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function() {
+        const xhr = new OriginalXHR();
+        const originalOpen = xhr.open;
+        xhr.open = function(method, url) {
+            try {
+                const urlObj = new URL(url, window.location.origin);
+                const host = urlObj.hostname;
+                
+                const isBlocked = settings.blockedServers.some(blockedItem => host.includes(blockedItem));
+                if (isBlocked) {
+                    console.warn(`[Boosteroid Tweaks] Заблокирован XHR запрос к: ${host}`);
+                    throw new Error(`[Boosteroid Tweaks] XHR to ${host} blocked.`);
+                }
+
+                checkAndSetServer(host);
+            } catch(e) {}
+            return originalOpen.apply(this, arguments);
+        };
+        return xhr;
+    };
 
     // === ANTI-AFK ===
     // 1. Подмена Gamepad API (облачные сервисы доверяют геймпадам)
