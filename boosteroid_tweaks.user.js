@@ -55,23 +55,38 @@
     
     // Функция для фильтрации служебных доменов Boosteroid
     const checkAndSetServer = (host, fullUrl = '') => {
-        const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
-        const isStreamApi = fullUrl.includes('/webrtc') || fullUrl.includes('/janus');
+        const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || (host && host.includes(':') && host.includes('[')); // Базовая проверка на IPv4 и IPv6
+        // Захватываем /api/call - это финальный запрос к WebRTC серверу Boosteroid!
+        const isStreamApi = fullUrl.includes('/webrtc') || fullUrl.includes('/janus') || fullUrl.includes('/api/call');
+        const isPingApi = fullUrl.includes('&ping=1') || fullUrl.includes('?ping=1');
 
-        if (isIP || (host && host.includes('boosteroid.com'))) {
-            // Игнорируем основные сайты, API и служебные домены
+        // Расширяем поддержку доменов
+        const isBoosteroidDomain = host && (host.includes('boosteroid') || host.includes('.cloud') || host.includes('.net'));
+
+        if (isIP || isBoosteroidDomain || isStreamApi) {
+            // Игнорируем основные сайты, API и служебные домены, если это не явный вызов Stream API
             const ignoreList = ['cloud.boosteroid.com', 'api.boosteroid.com', 'games.boosteroid.com', 'boosteroid.com', 'mtls.boosteroid.com'];
             
-            if (!ignoreList.includes(host) || isStreamApi) {
+            // Если это явный вызов Stream API (/api/call) - это 100% активный гейтвей!
+            if (isStreamApi) {
+                let changed = false;
+                if (isIP && host !== lastServerIp) { lastServerIp = host; changed = true; }
+                if (!isIP && host !== lastServerName) { lastServerName = host; changed = true; }
+                
+                if (changed) {
+                    console.log(`[Boosteroid Tweaks] 🎮 Подтвержден активный сервер: ${host} (через Stream API)`);
+                    if (window.renderPanelGlobal) window.renderPanelGlobal();
+                }
+            } 
+            // Иначе, если это не пинг-запрос и не в игнор-листе
+            else if (!ignoreList.includes(host) && !isPingApi) {
                 let changed = false;
                 if (isIP && host !== lastServerIp) { lastServerIp = host; changed = true; }
                 if (!isIP && host !== lastServerName) { lastServerName = host; changed = true; }
                 
                 if (changed) {
                     console.log(`[Boosteroid Tweaks] 🌍 Обнаружен сервер: ${host} (из ${fullUrl.substring(0, 80)})`);
-                    if (window.renderPanelGlobal) {
-                        window.renderPanelGlobal();
-                    }
+                    if (window.renderPanelGlobal) window.renderPanelGlobal();
                 }
             }
         }
@@ -205,7 +220,8 @@
                                     const remoteCandidate = stats.get(report.remoteCandidateId);
                                     if (remoteCandidate) {
                                         const ip = remoteCandidate.ip || remoteCandidate.address;
-                                        if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastServerIp) {
+                                        // Убрали проверку ip.includes('.') для поддержки IPv6
+                                        if (ip && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.endsWith('.local') && ip !== lastServerIp) {
                                             lastServerIp = ip;
                                             console.log(`[Boosteroid Tweaks] 📡 WebRTC IP сервера обнаружен: ${ip}`);
                                             if (window.renderPanelGlobal) window.renderPanelGlobal();
