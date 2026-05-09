@@ -188,6 +188,51 @@
         return xhr;
     };
 
+    // 5. Легковесный перехват WebRTC для определения IP сервера (без оверлея статистики)
+    const setupRtcProxy = (RTCClass) => {
+        if (!RTCClass) return null;
+        return new Proxy(RTCClass, {
+            construct(target, args) {
+                const pc = new target(...args);
+                
+                let checkInterval = setInterval(async () => {
+                    const state = pc.connectionState || pc.iceConnectionState;
+                    if (state === 'connected') {
+                        try {
+                            const stats = await pc.getStats();
+                            stats.forEach(report => {
+                                if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.remoteCandidateId) {
+                                    const remoteCandidate = stats.get(report.remoteCandidateId);
+                                    if (remoteCandidate) {
+                                        const ip = remoteCandidate.ip || remoteCandidate.address;
+                                        if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastServerIp) {
+                                            lastServerIp = ip;
+                                            console.log(`[Boosteroid Tweaks] 📡 WebRTC IP сервера обнаружен: ${ip}`);
+                                            if (window.renderPanelGlobal) window.renderPanelGlobal();
+                                            clearInterval(checkInterval); // IP найден, прекращаем проверки
+                                        }
+                                    }
+                                }
+                            });
+                        } catch (e) {}
+                    } else if (state === 'closed' || state === 'failed') {
+                        clearInterval(checkInterval);
+                    }
+                }, 2000);
+
+                return pc;
+            }
+        });
+    };
+
+    if (window.RTCPeerConnection) {
+        window.RTCPeerConnection = setupRtcProxy(window.RTCPeerConnection);
+    }
+    if (window.webkitRTCPeerConnection && !window.webkitRTCPeerConnection.__btProxied) {
+        window.webkitRTCPeerConnection = setupRtcProxy(window.webkitRTCPeerConnection);
+        window.webkitRTCPeerConnection.__btProxied = true;
+    }
+
     // === ANTI-AFK ===
     // 1. Подмена Gamepad API (облачные сервисы доверяют геймпадам)
     const originalGetGamepads = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : null;
