@@ -12,7 +12,7 @@
 // @downloadURL  https://raw.githubusercontent.com/FyziGo/boosteroid-tweaks/master/boosteroid_tweaks.user.js
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // === НАСТРОЙКИ ===
@@ -54,7 +54,7 @@
 
     // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА СЕРВЕРОВ) ===
     const OriginalWebSocket = window.WebSocket;
-    window.WebSocket = function(url, protocols) {
+    window.WebSocket = function (url, protocols) {
         const urlObj = new URL(url);
         const host = urlObj.hostname;
 
@@ -85,17 +85,17 @@
             const wsPropDescriptor = Object.getOwnPropertyDescriptor(OriginalWebSocket.prototype, 'onmessage');
             if (wsPropDescriptor) {
                 Object.defineProperty(ws, 'onmessage', {
-                    get: function() {
+                    get: function () {
                         return wsPropDescriptor.get.call(this);
                     },
-                    set: function(handler) {
-                        const wrappedHandler = function(evt) {
+                    set: function (handler) {
+                        const wrappedHandler = function (evt) {
                             try {
                                 if (typeof evt.data === 'string' && evt.data.includes('"action":"activity"')) {
                                     const msg = JSON.parse(evt.data);
                                     if (msg.type === 'message' && msg.action === 'activity') {
                                         console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK предупреждение от сервера!');
-                                        
+
                                         if (ws.readyState === OriginalWebSocket.OPEN) {
                                             ws.send(JSON.stringify({
                                                 type: "settings",
@@ -104,13 +104,13 @@
                                             }));
                                             console.log('[Boosteroid Tweaks] ✅ Успешно отправлен автоответ "I am here". Окно не появится.');
                                         }
-                                        
+
                                         // Блокируем оригинальный обработчик, чтобы окно не появилось на экране и звук не проигрался
                                         return;
                                     }
                                 }
-                            } catch(e) {}
-                            
+                            } catch (e) { }
+
                             return handler ? handler.call(this, evt) : null;
                         };
                         wsPropDescriptor.set.call(this, wrappedHandler);
@@ -121,22 +121,22 @@
 
         return ws;
     };
-    
+
     // Перехватем также RTCPeerConnection на всякий случай, если сигналинг происходит не по WS, 
     // но обычно для видео-стримов IP адрес определяется при создании PeerConnection
     let peerConnections = [];
     const OriginalRTCPeerConnection = window.RTCPeerConnection;
-    window.RTCPeerConnection = function(configuration) {
+    window.RTCPeerConnection = function (configuration) {
         const pc = new OriginalRTCPeerConnection(configuration);
         peerConnections.push(pc);
-        
+
         // Очищаем закрытые соединения для экономии памяти
         pc.addEventListener('connectionstatechange', () => {
             if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
                 peerConnections = peerConnections.filter(p => p !== pc);
             }
         });
-        
+
         return pc;
     };
 
@@ -145,9 +145,9 @@
     // 1. Подмена Gamepad API (облачные сервисы доверяют геймпадам)
     const originalGetGamepads = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : null;
     let fakeGamepadActive = false;
-    
+
     if (originalGetGamepads) {
-        navigator.getGamepads = function() {
+        navigator.getGamepads = function () {
             const gamepads = originalGetGamepads();
             if (settings.antiAfk && fakeGamepadActive) {
                 const pads = Array.from(gamepads);
@@ -187,17 +187,17 @@
 
     if (originalHidden) {
         Object.defineProperty(document, 'hidden', {
-            get: function() { return settings.antiAfk ? false : originalHidden.get.call(this); }
+            get: function () { return settings.antiAfk ? false : originalHidden.get.call(this); }
         });
     }
     if (originalVisibility) {
         Object.defineProperty(document, 'visibilityState', {
-            get: function() { return settings.antiAfk ? 'visible' : originalVisibility.get.call(this); }
+            get: function () { return settings.antiAfk ? 'visible' : originalVisibility.get.call(this); }
         });
     }
     if (originalHasFocus) {
         Object.defineProperty(document, 'hasFocus', {
-            get: function() { return settings.antiAfk ? true : originalHasFocus.get.call(this); }
+            get: function () { return settings.antiAfk ? true : originalHasFocus.get.call(this); }
         });
     }
 
@@ -210,18 +210,18 @@
 
         // Ищем элемент, в котором идет трансляция
         const streamTarget = document.querySelector('canvas') || document.querySelector('video') || document.body;
-        
+
         if (streamTarget) {
             const rect = streamTarget.getBoundingClientRect();
             const opts = {
                 view: window, bubbles: true, cancelable: true,
                 clientX: rect.width / 2, clientY: rect.height / 2
             };
-            
+
             // Симулируем события мыши, тача и клавиатуры для надежности
             streamTarget.dispatchEvent(new MouseEvent('mousemove', opts));
             streamTarget.dispatchEvent(new PointerEvent('pointermove', opts));
-            
+
             const keyOpts = { key: 'Shift', code: 'ShiftLeft', keyCode: 16, bubbles: true, cancelable: true };
             document.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
             setTimeout(() => document.dispatchEvent(new KeyboardEvent('keyup', keyOpts)), 50);
@@ -242,8 +242,8 @@
             statsContainer = document.createElement('div');
             statsContainer.id = 'bt-stats-overlay';
             Object.assign(statsContainer.style, {
-                position: 'fixed', top: '20px', left: '20px', background: 'rgba(0,0,0,0.7)', 
-                color: '#fff', fontFamily: 'monospace', padding: '10px 15px', borderRadius: '8px', 
+                position: 'fixed', top: '100px', left: '20px', background: 'rgba(0,0,0,0.7)',
+                color: '#fff', fontFamily: 'monospace', padding: '10px 15px', borderRadius: '8px',
                 pointerEvents: 'none', zIndex: '999998', display: 'none', fontSize: '14px',
                 textShadow: '1px 1px 2px #000', border: '1px solid rgba(255,255,255,0.1)'
             });
@@ -264,7 +264,7 @@
                     const stats = await pc.getStats();
                     let hasVideoData = false;
                     stats.forEach(report => {
-                        if (report.type === 'inbound-rtp' && report.kind === 'video' && report.bytesReceived > 0) {
+                        if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video' || report.id.includes('video')) && report.bytesReceived > 0) {
                             hasVideoData = true;
                         }
                     });
@@ -272,7 +272,7 @@
                         activeStats = stats;
                         break;
                     }
-                } catch(e) {}
+                } catch (e) { }
             }
         }
 
@@ -284,12 +284,12 @@
         try {
             const stats = activeStats;
             let ping = 0, packetLoss = 0, fps = 0, resolution = '', bytesReceived = 0;
-            
+
             stats.forEach(report => {
                 if (report.type === 'candidate-pair' && report.state === 'succeeded') {
                     ping = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) : 0;
                 }
-                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video' || report.id.includes('video'))) {
                     packetLoss = report.packetsLost || 0;
                     fps = report.framesPerSecond || 0;
                     bytesReceived = report.bytesReceived || 0;
@@ -315,7 +315,7 @@
                 if (ping < 20 && packetLoss < 10) { rating = t('ratingExc'); color = '#00e676'; }
                 else if (ping < 50 && packetLoss < 50) { rating = t('ratingGood'); color = '#c6ff00'; }
                 else if (ping < 100 || packetLoss < 150) { rating = t('ratingPoor'); color = '#ff9100'; }
-                
+
                 html += `<div style="color: ${color}; font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: center;">${rating}</div>`;
             }
 
@@ -333,7 +333,7 @@
             statsContainer.innerHTML = html;
         } catch (e) { console.error('BT Stats Error', e); }
     }
-    
+
     setInterval(updateStatsLoop, 1000);
 
 
@@ -344,9 +344,9 @@
 
         const container = document.createElement('div');
         container.id = 'boosteroid-tweaks-container';
-        
+
         // Используем Shadow DOM, чтобы стили не пересекались с сайтом
-        const shadow = container.attachShadow({mode: 'open'});
+        const shadow = container.attachShadow({ mode: 'open' });
 
         const style = document.createElement('style');
         style.textContent = `
