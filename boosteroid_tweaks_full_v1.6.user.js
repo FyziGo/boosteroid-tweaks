@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      1.6
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -19,7 +19,9 @@
     const defaultSettings = {
         antiAfk: false,
         blockedServers: [],
-        language: ''
+        language: '',
+        statsMode: 0,
+        showPerfRating: true
     };
 
     let settings = Object.assign({}, defaultSettings, JSON.parse(GM_getValue('boosteroid_settings', JSON.stringify(defaultSettings))));
@@ -29,10 +31,10 @@
     }
 
     const i18n = {
-        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add' },
-        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить' },
-        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати' },
-        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir' }
+        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add', statsTitle: 'Better Stats (Overlay)', statsOff: 'Off', statsMin: 'Minimal', statsFull: 'Detailed', perfRating: 'Performance Rating', ratingExc: 'Excellent', ratingGood: 'Good', ratingPoor: 'Poor', ratingBad: 'Bad' },
+        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить', statsTitle: 'Оверлей статистики', statsOff: 'Выкл', statsMin: 'Минимум', statsFull: 'Детально', perfRating: 'Оценка производительности', ratingExc: 'Отлично', ratingGood: 'Хорошо', ratingPoor: 'Плохо', ratingBad: 'Ужасно' },
+        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати', statsTitle: 'Оверлей статистики', statsOff: 'Вимк', statsMin: 'Мінімум', statsFull: 'Детально', perfRating: 'Оцінка продуктивності', ratingExc: 'Відмінно', ratingGood: 'Добре', ratingPoor: 'Погано', ratingBad: 'Жахливо' },
+        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir', statsTitle: 'Mejores Estadísticas', statsOff: 'Apagado', statsMin: 'Mínimo', statsFull: 'Detallado', perfRating: 'Calificación de rendimiento', ratingExc: 'Excelente', ratingGood: 'Bueno', ratingPoor: 'Pobre', ratingBad: 'Malo' }
     };
 
     let currentLang = settings.language;
@@ -141,7 +143,55 @@
         return ws;
     };
 
+    // Перехват RTCPeerConnection через Proxy — прозрачный перехват, который
+    // сохраняет prototype, static методы (generateCertificate) и instanceof.
+    // Это критично для совместимости с adapter.js (WebRTC shim от Google),
+    // который загружается на странице Boosteroid и shimm-ит RTCPeerConnection.
+    let peerConnections = [];
+    const OriginalRTCPeerConnection = window.RTCPeerConnection;
 
+    if (OriginalRTCPeerConnection) {
+        window.RTCPeerConnection = new Proxy(OriginalRTCPeerConnection, {
+            construct(target, args) {
+                const pc = new target(...args);
+                peerConnections.push(pc);
+                console.log(`[Boosteroid Tweaks] 📡 RTCPeerConnection создан. Всего активных: ${peerConnections.length}`);
+
+                // Очищаем закрытые соединения для экономии памяти
+                pc.addEventListener('connectionstatechange', () => {
+                    const state = pc.connectionState;
+                    console.log(`[Boosteroid Tweaks] 📡 PeerConnection state: ${state}`);
+                    if (state === 'closed' || state === 'failed') {
+                        peerConnections = peerConnections.filter(p => p !== pc);
+                    }
+                });
+
+                return pc;
+            },
+            apply(target, thisArg, args) {
+                // На случай вызова без new (некоторые shim-ы так делают)
+                return new target(...args);
+            }
+        });
+    }
+
+    // Перехват webkitRTCPeerConnection (для старых браузеров / adapter.js)
+    if (window.webkitRTCPeerConnection && !window.webkitRTCPeerConnection.__btProxied) {
+        const OriginalWebkitRTC = window.webkitRTCPeerConnection;
+        window.webkitRTCPeerConnection = new Proxy(OriginalWebkitRTC, {
+            construct(target, args) {
+                const pc = new target(...args);
+                peerConnections.push(pc);
+                pc.addEventListener('connectionstatechange', () => {
+                    if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                        peerConnections = peerConnections.filter(p => p !== pc);
+                    }
+                });
+                return pc;
+            }
+        });
+        window.webkitRTCPeerConnection.__btProxied = true;
+    }
 
     // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid)
     const originalFetch = window.fetch;
@@ -279,9 +329,40 @@
 
     // 3. Авто-клик удален. Теперь используется перехват WebSocket (см. выше), что на 100% надежнее.
 
-    // === АВТОДЕТЕКТ СЕРВЕРА ЧЕРЕЗ ГЛОБАЛЫ BOOSTEROID (фолбэк) ===
-    // Если перехват WS/Fetch/XHR не поймал имя сервера,
-    // читаем напрямую из глобальных объектов Boosteroid.
+    // === BETTER STATS OVERLAY ===
+    let lastBytesReceived = 0;
+    let lastStatsTime = 0;
+    let statsContainer = null;
+
+    // Резервный механизм обнаружения PeerConnection через глобальные объекты Boosteroid.
+    // Если Proxy-перехват конструктора не сработал (adapter.js, CSP, iframe),
+    // мы напрямую обращаемся к объектам, которые Boosteroid создаёт в window.
+    function discoverPeerConnections() {
+        const found = [];
+
+        // 1. Новый WebRTC-движок: WebRtcTransport.streamer.pc
+        try {
+            const wrtPC = window.WebRtcTransport && window.WebRtcTransport.pc;
+            if (wrtPC && (wrtPC.connectionState === 'connected' || wrtPC.iceConnectionState === 'connected')) {
+                found.push(wrtPC);
+            }
+        } catch (e) { }
+
+        // 2. Janus-движок: JANUS_HELPER.streamingVideo.webrtcStuff.pc
+        try {
+            const janusPC = window.JANUS_HELPER &&
+                window.JANUS_HELPER.streamingVideo &&
+                window.JANUS_HELPER.streamingVideo.webrtcStuff &&
+                window.JANUS_HELPER.streamingVideo.webrtcStuff.pc;
+            if (janusPC && (janusPC.connectionState === 'connected' || janusPC.iceConnectionState === 'connected')) {
+                found.push(janusPC);
+            }
+        } catch (e) { }
+
+        return found;
+    }
+
+    // Резервный механизм обнаружения сервера через глобальные объекты Boosteroid
     function discoverServerFromGlobals() {
         try {
             // JANUS_HELPER.server = "https://gw-xxx.boosteroid.com/janus"
@@ -300,23 +381,140 @@
                 checkAndSetServer(url.hostname, wrtUrl);
             }
         } catch (e) { }
-
-        try {
-            // SessionHandler.parsePings[0].address = "https://gw-xxx.cloud.boosteroid.com:443"
-            const pings = window.SessionHandler && window.SessionHandler.parsePings;
-            if (pings && pings.length > 0 && pings[0].address) {
-                const url = new URL(pings[0].address);
-                checkAndSetServer(url.hostname, pings[0].address);
-            }
-        } catch (e) { }
     }
 
-    // Polling: каждые 3 секунды пробуем обнаружить сервер через глобалы
-    setInterval(() => {
+    async function updateStatsLoop() {
+        if (!statsContainer) {
+            statsContainer = document.createElement('div');
+            statsContainer.id = 'bt-stats-overlay';
+            Object.assign(statsContainer.style, {
+                position: 'fixed', top: '100px', left: '20px', background: 'rgba(0,0,0,0.7)',
+                color: '#fff', fontFamily: 'monospace', padding: '10px 15px', borderRadius: '8px',
+                pointerEvents: 'none', zIndex: '999998', display: 'none', fontSize: '14px',
+                textShadow: '1px 1px 2px #000', border: '1px solid rgba(255,255,255,0.1)'
+            });
+            document.body.appendChild(statsContainer);
+        }
+
+        if (settings.statsMode === 0) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+
+        // Пробуем обнаружить сервер через глобалы Boosteroid (фолбэк)
         if (!lastServerName && !lastServerIp) {
             discoverServerFromGlobals();
         }
-    }, 3000);
+
+        // Собираем все PeerConnection-ы: из Proxy-перехвата + из глобалов Boosteroid
+        const discoveredPCs = discoverPeerConnections();
+        const allPCs = [...peerConnections];
+        for (const dpc of discoveredPCs) {
+            if (!allPCs.includes(dpc)) {
+                allPCs.push(dpc);
+                // Добавляем в основной массив, чтобы не искать заново
+                if (!peerConnections.includes(dpc)) {
+                    peerConnections.push(dpc);
+                    console.log('[Boosteroid Tweaks] 📡 PeerConnection найден через глобалы Boosteroid (фолбэк)');
+                }
+            }
+        }
+
+        let activeStats = null;
+
+        // Ищем активное соединение среди всех найденных
+        for (const pc of allPCs) {
+            if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected') {
+                try {
+                    const stats = await pc.getStats();
+                    let hasVideoData = false;
+                    stats.forEach(report => {
+                        if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video' || report.id.includes('video')) && report.bytesReceived > 0) {
+                            hasVideoData = true;
+                        }
+                    });
+                    if (hasVideoData) {
+                        activeStats = stats;
+                        break;
+                    }
+                } catch (e) { }
+            }
+        }
+
+        if (!activeStats) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const stats = activeStats;
+            let ping = 0, packetLoss = 0, fps = 0, resolution = '', bytesReceived = 0;
+            let activeRemoteCandidateId = null;
+
+            stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    ping = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) : 0;
+                    if (report.remoteCandidateId) activeRemoteCandidateId = report.remoteCandidateId;
+                }
+                if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video' || report.id.includes('video'))) {
+                    packetLoss = report.packetsLost || 0;
+                    fps = report.framesPerSecond || 0;
+                    bytesReceived = report.bytesReceived || 0;
+                    if (report.frameWidth) resolution = `${report.frameWidth}x${report.frameHeight}`;
+                }
+            });
+
+            // Пытаемся достать IP-адрес сервера из WebRTC кандидата
+            if (activeRemoteCandidateId) {
+                const remoteCandidate = stats.get(activeRemoteCandidateId);
+                if (remoteCandidate) {
+                    const ip = remoteCandidate.ip || remoteCandidate.address;
+                    // Если это реальный IP (не локальный и не пустой), и он отличается от текущего - обновляем
+                    if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastServerIp) {
+                        lastServerIp = ip;
+                        if (window.renderPanelGlobal) window.renderPanelGlobal();
+                    }
+                }
+            }
+
+            const now = performance.now();
+            let bitrateMbps = '0.00';
+            if (lastStatsTime && bytesReceived) {
+                const timeDiff = (now - lastStatsTime) / 1000;
+                const bytesDiff = bytesReceived - lastBytesReceived;
+                bitrateMbps = ((bytesDiff * 8) / 1000000 / timeDiff).toFixed(2);
+            }
+            lastBytesReceived = bytesReceived;
+            lastStatsTime = now;
+
+            statsContainer.style.display = 'block';
+            let html = '';
+
+            if (settings.showPerfRating) {
+                let rating = t('ratingBad'), color = '#ff4444';
+                if (ping < 20 && packetLoss < 10) { rating = t('ratingExc'); color = '#00e676'; }
+                else if (ping < 50 && packetLoss < 50) { rating = t('ratingGood'); color = '#c6ff00'; }
+                else if (ping < 100 || packetLoss < 150) { rating = t('ratingPoor'); color = '#ff9100'; }
+
+                html += `<div style="color: ${color}; font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: center;">${rating}</div>`;
+            }
+
+            if (settings.statsMode === 1) {
+                html += `<div style="display:flex;justify-content:space-between;gap:15px;"><span>PING:</span><span style="color:#0f0">${ping}ms</span></div>
+                         <div style="display:flex;justify-content:space-between;gap:15px;"><span>FPS:</span><span style="color:#0f0">${fps}</span></div>`;
+            } else if (settings.statsMode === 2) {
+                html += `<div style="display:flex;justify-content:space-between;gap:15px;"><span>PING:</span><span style="color:#0f0">${ping}ms</span></div>
+                         <div style="display:flex;justify-content:space-between;gap:15px;"><span>BITRATE:</span><span style="color:#0f0">${bitrateMbps} Mbps</span></div>
+                         <div style="display:flex;justify-content:space-between;gap:15px;"><span>FPS:</span><span style="color:#0f0">${fps}</span></div>
+                         <div style="display:flex;justify-content:space-between;gap:15px;"><span>LOSS:</span><span style="color:#0f0">${packetLoss}</span></div>
+                         <div style="display:flex;justify-content:space-between;gap:15px;"><span>RES:</span><span style="color:#0f0">${resolution || 'N/A'}</span></div>`;
+            }
+
+            statsContainer.innerHTML = html;
+        } catch (e) { console.error('BT Stats Error', e); }
+    }
+
+    setInterval(updateStatsLoop, 1000);
 
 
     // === ПОЛЬЗОВАТЕЛЬСКИЙ ИНТЕРФЕЙС ===
@@ -508,7 +706,22 @@
                     </label>
                 </div>
 
-
+                <div class="setting-row">
+                    <label>${t('statsTitle')}</label>
+                    <select id="bt-stats-mode" style="background: #2a2a2a; color: white; border: 1px solid #555; border-radius: 4px; padding: 2px 5px; outline: none;">
+                        <option value="0" ${settings.statsMode === 0 ? 'selected' : ''}>${t('statsOff')}</option>
+                        <option value="1" ${settings.statsMode === 1 ? 'selected' : ''}>${t('statsMin')}</option>
+                        <option value="2" ${settings.statsMode === 2 ? 'selected' : ''}>${t('statsFull')}</option>
+                    </select>
+                </div>
+                
+                <div class="setting-row">
+                    <label>${t('perfRating')}</label>
+                    <label class="switch">
+                        <input type="checkbox" id="bt-perf-rating" ${settings.showPerfRating ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
                 <div class="setting-row" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px; background: #2a2a2a; padding: 10px; border-radius: 8px;">
                     <label style="margin-bottom: 5px; font-size: 13px; color: #bbb;">${t('lastServer')}</label>
@@ -549,7 +762,17 @@
                 saveSettings();
             });
 
+            panel.querySelector('#bt-stats-mode').addEventListener('change', (e) => {
+                settings.statsMode = parseInt(e.target.value);
+                saveSettings();
+                renderPanel();
+            });
 
+            panel.querySelector('#bt-perf-rating').addEventListener('change', (e) => {
+                settings.showPerfRating = e.target.checked;
+                saveSettings();
+                renderPanel();
+            });
 
             const blockLastBtn = panel.querySelector('#block-last-btn');
             if (blockLastBtn) {
