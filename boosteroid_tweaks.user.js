@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -55,11 +55,15 @@
     // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА И АВТОДЕТЕКТ СЕРВЕРОВ) ===
     
     // Функция для фильтрации служебных доменов Boosteroid
-    const checkAndSetServer = (host) => {
-        if (host && host.includes('boosteroid.com')) {
+    const checkAndSetServer = (host, fullUrl = '') => {
+        const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
+        const isStreamApi = fullUrl.includes('/webrtc') || fullUrl.includes('/janus');
+
+        if (isIP || (host && host.includes('boosteroid.com'))) {
             // Игнорируем основные сайты, API и служебные домены
             const ignoreList = ['cloud.boosteroid.com', 'api.boosteroid.com', 'games.boosteroid.com', 'boosteroid.com', 'mtls.boosteroid.com'];
-            if (!ignoreList.includes(host)) {
+            
+            if (!ignoreList.includes(host) || isStreamApi) {
                 lastDetectedServer = host;
                 if (window.renderPanelGlobal) {
                     window.renderPanelGlobal();
@@ -82,7 +86,7 @@
             throw new Error(`[Boosteroid Tweaks] Connection to ${host} blocked by user settings.`);
         }
 
-        checkAndSetServer(host);
+        checkAndSetServer(host, url);
 
         let ws;
         if (protocols === undefined) {
@@ -166,7 +170,7 @@
                     return Promise.reject(new Error(`[Boosteroid Tweaks] Fetch to ${host} blocked.`));
                 }
 
-                checkAndSetServer(host);
+                checkAndSetServer(host, url);
             }
         } catch(e) {}
         return originalFetch.apply(this, arguments);
@@ -188,7 +192,7 @@
                     throw new Error(`[Boosteroid Tweaks] XHR to ${host} blocked.`);
                 }
 
-                checkAndSetServer(host);
+                checkAndSetServer(host, url);
             } catch(e) {}
             return originalOpen.apply(this, arguments);
         };
@@ -338,10 +342,12 @@
         try {
             const stats = activeStats;
             let ping = 0, packetLoss = 0, fps = 0, resolution = '', bytesReceived = 0;
+            let activeRemoteCandidateId = null;
 
             stats.forEach(report => {
                 if (report.type === 'candidate-pair' && report.state === 'succeeded') {
                     ping = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) : 0;
+                    if (report.remoteCandidateId) activeRemoteCandidateId = report.remoteCandidateId;
                 }
                 if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video' || report.id.includes('video'))) {
                     packetLoss = report.packetsLost || 0;
@@ -350,6 +356,19 @@
                     if (report.frameWidth) resolution = `${report.frameWidth}x${report.frameHeight}`;
                 }
             });
+
+            // Пытаемся достать IP-адрес сервера из WebRTC кандидата
+            if (activeRemoteCandidateId) {
+                const remoteCandidate = stats.get(activeRemoteCandidateId);
+                if (remoteCandidate) {
+                    const ip = remoteCandidate.ip || remoteCandidate.address;
+                    // Если это реальный IP (не локальный и не пустой), и он отличается от текущего - обновляем
+                    if (ip && ip.includes('.') && !ip.startsWith('192.168.') && !ip.startsWith('10.') && ip !== lastDetectedServer) {
+                        lastDetectedServer = ip;
+                        if (window.renderPanelGlobal) window.renderPanelGlobal();
+                    }
+                }
+            }
 
             const now = performance.now();
             let bitrateMbps = '0.00';
