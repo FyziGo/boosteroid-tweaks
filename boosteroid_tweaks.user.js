@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @run-at       document-start
+// @updateURL    https://raw.githubusercontent.com/FyziGo/boosteroid-tweaks/master/boosteroid_tweaks.user.js
+// @downloadURL  https://raw.githubusercontent.com/FyziGo/boosteroid-tweaks/master/boosteroid_tweaks.user.js
 // ==/UserScript==
 
 (function() {
