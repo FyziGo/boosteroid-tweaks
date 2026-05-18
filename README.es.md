@@ -8,17 +8,14 @@ El script añade capacidades para gestionar servidores, protección robusta cont
 
 ## ✨ Características y Ventajas
 
-*   **🛡️ Anti-AFK Invisible (Protección contra desconexión por inactividad)**
-    Olvídate de las advertencias de "¿Sigues ahí?" y el tiempo de espera de 10 minutos. El script intercepta las solicitudes de actividad de Boosteroid directamente en la capa de red (WebSocket) y responde instantáneamente al servidor. ¡El cuadro de advertencia ni siquiera aparece en tu pantalla! Perfecto para sesiones de juego largas o el uso de Steam Remote Play.
+*   **🛡️ Anti-AFK Multimodo (Protección contra desconexión por inactividad)**
+    Olvídate de las advertencias de "¿Sigues ahí?" y el tiempo de espera de 10 minutos. Soporta 3 modos: 'Apagado', 'Intercepción de red' (respuestas de socket instantáneas sin diálogos) y 'Simulación F15'. Perfecto para sesiones de juego largas o el uso de Steam Remote Play.
 *   **🌍 Gestor de Servidores (Bloqueador de centros de datos con lag)**
     ¿Terminaste en un servidor con alto ping o mala calidad? El script detecta automáticamente tu servidor actual y te permite añadirlo a una "lista negra". La próxima vez que inicies un juego, el script bloqueará la conexión a ese servidor no deseado, obligando a Boosteroid a redirigirte a un centro de datos diferente.
-*   **📊 Estadísticas Avanzadas (Better Stats)**
-    Un overlay integrado (similar a los contadores de FPS de Steam o GeForce Experience) que muestra en tiempo real:
-    *   **Ping (ms)** — latencia hasta el servidor
-    *   **FPS** — velocidad de fotogramas del flujo de video
-    *   **Bitrate** — tasa de bits actual de la red (Mbps)
-    *   **Loss** — pérdida de paquetes (afecta los congelamientos)
-    *   **Resolution** — resolución real del flujo de video
+*   **🎬 Selector de Códec de Video y Límite de Bitrate**
+    Fuerza tu códec de flujo de video preferido (H.265/HEVC, H.264 o AV1) y establece un bitrate máximo personalizado mediante la manipulación de SDP para mejorar la estabilidad del flujo en redes lentas.
+*   **🚀 Omitir Pantalla de Salida**
+    Omite automáticamente la pantalla de calificación y comentarios posterior al juego para regresar de inmediato a la página de inicio.
 *   **🎨 Interfaz de Usuario Limpia**
     Se puede acceder a la configuración haciendo clic en el ícono de engranaje, y está integrada directamente en la página de Boosteroid usando la tecnología Shadow DOM (lo que garantiza que no haya conflictos con el diseño del sitio).
 *   **🌐 Multilenguaje**

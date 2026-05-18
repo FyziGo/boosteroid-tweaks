@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.2
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -15,24 +15,37 @@
 (function () {
     'use strict';
 
+    // В Tampermonkey с @grant GM_* скрипт работает в песочнице.
+    // unsafeWindow — это реальный window страницы, куда нужно инжектить перехватчики.
+    const _w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
     // === НАСТРОЙКИ ===
     const defaultSettings = {
-        antiAfk: false,
+        antiAfkMode: 'off',
+        preferredCodec: 'auto',
+        bandwidthLimit: 0,
         blockedServers: [],
-        language: ''
+        language: '',
+        skipExitScreen: false
     };
 
     let settings = Object.assign({}, defaultSettings, JSON.parse(GM_getValue('boosteroid_settings', JSON.stringify(defaultSettings))));
+
+    if (typeof settings.antiAfk === 'boolean') {
+        settings.antiAfkMode = settings.antiAfk ? 'intercept' : 'off';
+        delete settings.antiAfk;
+        GM_setValue('boosteroid_settings', JSON.stringify(settings));
+    }
 
     function saveSettings() {
         GM_setValue('boosteroid_settings', JSON.stringify(settings));
     }
 
     const i18n = {
-        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add' },
-        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить' },
-        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати' },
-        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK (Steam Remote)', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir' }
+        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK Mode', afkOff: 'Off', afkNet: 'Net', afkF15: 'F15', codec: 'Video Codec', codecAuto: 'Auto', bandwidth: 'Bitrate Limit', bwUnlimited: 'Unlimited', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add', skipExit: 'Skip Exit Screen' },
+        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Выкл', afkNet: 'Сеть', afkF15: 'F15', codec: 'Видеокодек', codecAuto: 'Авто', bandwidth: 'Лимит битрейта', bwUnlimited: 'Без ограничений', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить', skipExit: 'Пропускать окно выхода' },
+        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Вимк', afkNet: 'Мережа', afkF15: 'F15', codec: 'Відеокодек', codecAuto: 'Авто', bandwidth: 'Ліміт бітрейту', bwUnlimited: 'Без обмежень', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати', skipExit: 'Пропускати вікно виходу' },
+        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Modo Anti-AFK', afkOff: 'Apag', afkNet: 'Red', afkF15: 'F15', codec: 'Códec de video', codecAuto: 'Auto', bandwidth: 'Límite de bitrate', bwUnlimited: 'Sin límite', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir', skipExit: 'Omitir pantalla de salida' }
     };
 
     let currentLang = settings.language;
@@ -75,7 +88,7 @@
                 
                 if (changed) {
                     console.log(`[Boosteroid Tweaks] 🎮 Подтвержден активный сервер: ${host} (через Stream API)`);
-                    if (window.renderPanelGlobal) window.renderPanelGlobal();
+                    if (_w.renderPanelGlobal) _w.renderPanelGlobal();
                 }
             } 
             // Иначе, если это не пинг-запрос и не в игнор-листе
@@ -86,15 +99,15 @@
                 
                 if (changed) {
                     console.log(`[Boosteroid Tweaks] 🌍 Обнаружен сервер: ${host} (из ${fullUrl.substring(0, 80)})`);
-                    if (window.renderPanelGlobal) window.renderPanelGlobal();
+                    if (_w.renderPanelGlobal) _w.renderPanelGlobal();
                 }
             }
         }
     };
 
     // 1. Перехват WebSocket
-    const OriginalWebSocket = window.WebSocket;
-    window.WebSocket = function (url, protocols) {
+    const OriginalWebSocket = _w.WebSocket;
+    _w.WebSocket = function (url, protocols) {
         const urlObj = new URL(url);
         const host = urlObj.hostname;
 
@@ -115,20 +128,29 @@
             ws = new OriginalWebSocket(url, protocols);
         }
 
-        if (settings.antiAfk) {
-            const wsPropDescriptor = Object.getOwnPropertyDescriptor(OriginalWebSocket.prototype, 'onmessage');
-            if (wsPropDescriptor) {
-                Object.defineProperty(ws, 'onmessage', {
-                    get: function () {
-                        return wsPropDescriptor.get.call(this);
-                    },
-                    set: function (handler) {
-                        const wrappedHandler = function (evt) {
-                            try {
-                                if (typeof evt.data === 'string' && evt.data.includes('"action":"activity"')) {
-                                    const msg = JSON.parse(evt.data);
+        // Anti-AFK: ВСЕГДА устанавливаем перехватчик — проверяем settings.antiAfk
+        // внутри обработчика, чтобы включение/выключение работало без перезагрузки
+        const wsPropDescriptor = Object.getOwnPropertyDescriptor(OriginalWebSocket.prototype, 'onmessage');
+        if (wsPropDescriptor) {
+            Object.defineProperty(ws, 'onmessage', {
+                get: function () {
+                    return wsPropDescriptor.get.call(this);
+                },
+                set: function (handler) {
+                    const wrappedHandler = function (evt) {
+                        try {
+                            if (settings.antiAfkMode === 'intercept') {
+                                let dataStr = '';
+                                if (typeof evt.data === 'string') {
+                                    dataStr = evt.data;
+                                } else if (evt.data instanceof ArrayBuffer) {
+                                    dataStr = new TextDecoder().decode(evt.data);
+                                }
+
+                                if (dataStr && dataStr.includes('"action":"activity"')) {
+                                    const msg = JSON.parse(dataStr);
                                     if (msg.type === 'message' && msg.action === 'activity') {
-                                        console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK предупреждение от сервера!');
+                                        console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK предупреждение от сервера (WebSocket)!');
 
                                         if (ws.readyState === OriginalWebSocket.OPEN) {
                                             ws.send(JSON.stringify({
@@ -139,19 +161,58 @@
                                             console.log('[Boosteroid Tweaks] ✅ Успешно отправлен автоответ "I am here". Окно не появится.');
                                         }
 
-                                        // Блокируем оригинальный обработчик, чтобы окно не появилось на экране и звук не проигрался
+                                        // Блокируем оригинальный обработчик
                                         return;
                                     }
                                 }
-                            } catch (e) { }
+                            }
+                        } catch (e) { }
 
-                            return handler ? handler.call(this, evt) : null;
-                        };
-                        wsPropDescriptor.set.call(this, wrappedHandler);
-                    }
-                });
-            }
+                        return handler ? handler.call(this, evt) : null;
+                    };
+                    wsPropDescriptor.set.call(this, wrappedHandler);
+                }
+            });
         }
+
+        // Anti-AFK: перехватываем addEventListener('message') на случай,
+        // если Boosteroid использует его вместо ws.onmessage
+        const originalWsAddListener = ws.addEventListener;
+        ws.addEventListener = function(type, listener, options) {
+            if (type === 'message' && typeof listener === 'function') {
+                const wrappedListener = function(evt) {
+                    try {
+                        if (settings.antiAfkMode === 'intercept') {
+                            let dataStr = '';
+                            if (typeof evt.data === 'string') {
+                                dataStr = evt.data;
+                            } else if (evt.data instanceof ArrayBuffer) {
+                                dataStr = new TextDecoder().decode(evt.data);
+                            }
+
+                            if (dataStr && dataStr.includes('"action":"activity"')) {
+                                const msg = JSON.parse(dataStr);
+                                if (msg.type === 'message' && msg.action === 'activity') {
+                                    console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK (WebSocket addEventListener)!');
+                                    if (ws.readyState === OriginalWebSocket.OPEN) {
+                                        ws.send(JSON.stringify({
+                                            type: "settings",
+                                            action: "activity",
+                                            value: "I am here"
+                                        }));
+                                        console.log('[Boosteroid Tweaks] ✅ Автоответ отправлен (addEventListener).');
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (e) { }
+                    return listener.call(this, evt);
+                };
+                return originalWsAddListener.call(this, type, wrappedListener, options);
+            }
+            return originalWsAddListener.call(this, type, listener, options);
+        };
 
         return ws;
     };
@@ -159,13 +220,13 @@
 
 
     // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid)
-    const originalFetch = window.fetch;
-    window.fetch = async function () {
+    const originalFetch = _w.fetch;
+    _w.fetch = async function () {
         try {
             const req = arguments[0];
             const url = typeof req === 'string' ? req : (req instanceof Request ? req.url : '');
             if (url) {
-                const urlObj = new URL(url, window.location.origin);
+                const urlObj = new URL(url, _w.location.origin);
                 const host = urlObj.hostname;
                 
                 const isBlocked = settings.blockedServers.some(blockedItem => host.includes(blockedItem));
@@ -181,13 +242,13 @@
     };
 
     // 4. Перехват XMLHttpRequest (на всякий случай)
-    const OriginalXHR = window.XMLHttpRequest;
-    window.XMLHttpRequest = function() {
+    const OriginalXHR = _w.XMLHttpRequest;
+    _w.XMLHttpRequest = function() {
         const xhr = new OriginalXHR();
         const originalOpen = xhr.open;
         xhr.open = function(method, url) {
             try {
-                const urlObj = new URL(url, window.location.origin);
+                const urlObj = new URL(url, _w.location.origin);
                 const host = urlObj.hostname;
                 
                 const isBlocked = settings.blockedServers.some(blockedItem => host.includes(blockedItem));
@@ -203,13 +264,301 @@
         return xhr;
     };
 
-    // 5. Легковесный перехват WebRTC для определения IP сервера (без оверлея статистики)
+    // === ANTI-AFK для WebRTC Data Channels ===
+    function setupDataChannelInterceptor(channel) {
+        if (!channel || channel.__btIntercepted) return;
+        channel.__btIntercepted = true;
+
+        const originalAddEventListener = channel.addEventListener;
+        if (originalAddEventListener) {
+            channel.addEventListener = function(type, listener, options) {
+                if (type === 'message' && typeof listener === 'function') {
+                    const wrappedListener = function(evt) {
+                        try {
+                            if (settings.antiAfkMode === 'intercept') {
+                                let dataStr = '';
+                                if (typeof evt.data === 'string') {
+                                    dataStr = evt.data;
+                                } else if (evt.data instanceof ArrayBuffer) {
+                                    dataStr = new TextDecoder().decode(evt.data);
+                                }
+
+                                if (dataStr && dataStr.includes('"action":"activity"')) {
+                                    const msg = JSON.parse(dataStr);
+                                    if (msg.type === 'message' && msg.action === 'activity') {
+                                        console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK (RTCDataChannel addEventListener)!');
+                                        if (channel.readyState === 'open') {
+                                            channel.send(JSON.stringify({
+                                                type: "settings",
+                                                action: "activity",
+                                                value: "I am here"
+                                            }));
+                                            console.log('[Boosteroid Tweaks] ✅ Автоответ отправлен (RTCDataChannel).');
+                                        }
+                                        return; // Блокируем вызов оригинального обработчика
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                        return listener.call(this, evt);
+                    };
+                    return originalAddEventListener.call(this, type, wrappedListener, options);
+                }
+                return originalAddEventListener.call(this, type, listener, options);
+            };
+        }
+
+        const msgDescriptor = Object.getOwnPropertyDescriptor(RTCDataChannel.prototype, 'onmessage');
+        if (msgDescriptor) {
+            Object.defineProperty(channel, 'onmessage', {
+                get: function() { return msgDescriptor.get ? msgDescriptor.get.call(this) : this.__btOnMessage; },
+                set: function(handler) {
+                    this.__btOnMessage = handler;
+                    const wrappedHandler = function(evt) {
+                        try {
+                            if (settings.antiAfkMode === 'intercept') {
+                                let dataStr = '';
+                                if (typeof evt.data === 'string') {
+                                    dataStr = evt.data;
+                                } else if (evt.data instanceof ArrayBuffer) {
+                                    dataStr = new TextDecoder().decode(evt.data);
+                                }
+
+                                if (dataStr && dataStr.includes('"action":"activity"')) {
+                                    const msg = JSON.parse(dataStr);
+                                    if (msg.type === 'message' && msg.action === 'activity') {
+                                        console.log('[Boosteroid Tweaks] 🔥 Перехвачено AFK (RTCDataChannel onmessage)!');
+                                        if (channel.readyState === 'open') {
+                                            channel.send(JSON.stringify({
+                                                type: "settings",
+                                                action: "activity",
+                                                value: "I am here"
+                                            }));
+                                            console.log('[Boosteroid Tweaks] ✅ Автоответ отправлен (RTCDataChannel onmessage).');
+                                        }
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                        return handler ? handler.call(this, evt) : null;
+                    };
+                    if (msgDescriptor.set) {
+                        msgDescriptor.set.call(this, wrappedHandler);
+                    } else if (originalAddEventListener) {
+                        originalAddEventListener.call(this, 'message', wrappedHandler);
+                    }
+                }
+            });
+        }
+    }
+
+    // === ПРИНУДИТЕЛЬНЫЙ ВЫБОР ВИДЕОКОДЕКА (SDP Manipulation) ===
+    function modifySdpCodecPreference(sdp, preferredCodec) {
+        if (!preferredCodec || preferredCodec === 'auto') return sdp;
+
+        const codecAliases = {
+            'h265': ['h265', 'hevc'],
+            'h264': ['h264'],
+            'av1': ['av1', 'av01']
+        };
+
+        const aliases = codecAliases[preferredCodec];
+        if (!aliases) return sdp;
+
+        const lines = sdp.split('\r\n');
+        let videoMLineIndex = -1;
+        let inVideoSection = false;
+        const codecPayloadTypes = {}; // payloadType -> codecName (lowercase)
+
+        // Первый проход: находим m=video строку и строим карту кодеков
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('m=video')) {
+                videoMLineIndex = i;
+                inVideoSection = true;
+                continue;
+            }
+            if (lines[i].startsWith('m=') && inVideoSection) break;
+            if (inVideoSection) {
+                const rtpmapMatch = lines[i].match(/^a=rtpmap:(\d+)\s+(\S+)/);
+                if (rtpmapMatch) {
+                    codecPayloadTypes[rtpmapMatch[1]] = rtpmapMatch[2].split('/')[0].toLowerCase();
+                }
+            }
+        }
+
+        if (videoMLineIndex === -1) return sdp;
+
+        const mLineParts = lines[videoMLineIndex].split(' ');
+        const payloadTypes = mLineParts.slice(3);
+
+        // Находим payload types предпочитаемого кодека
+        const preferredPTs = payloadTypes.filter(pt => {
+            const codec = codecPayloadTypes[pt];
+            return codec && aliases.some(alias => codec === alias);
+        });
+
+        if (preferredPTs.length === 0) {
+            const available = Object.entries(codecPayloadTypes).map(([pt, name]) => `${name}(${pt})`).join(', ');
+            console.warn(`[Boosteroid Tweaks] ⚠️ Кодек ${preferredCodec.toUpperCase()} не найден в SDP. Доступные: ${available}`);
+            return sdp;
+        }
+
+        // Заменяем m-line — оставляем только предпочитаемый кодек
+        const removePTs = new Set(payloadTypes.filter(pt => !preferredPTs.includes(pt)));
+        mLineParts.splice(3, payloadTypes.length, ...preferredPTs);
+        lines[videoMLineIndex] = mLineParts.join(' ');
+
+        // Второй проход: удаляем атрибуты (rtpmap, fmtp, rtcp-fb) для удалённых кодеков
+        inVideoSection = false;
+        const filteredLines = [];
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('m=video')) inVideoSection = true;
+            else if (lines[i].startsWith('m=') && inVideoSection) inVideoSection = false;
+
+            if (inVideoSection) {
+                const attrMatch = lines[i].match(/^a=(rtpmap|fmtp|rtcp-fb):(\d+)/);
+                if (attrMatch && removePTs.has(attrMatch[2])) continue;
+            }
+            filteredLines.push(lines[i]);
+        }
+
+        console.log(`[Boosteroid Tweaks] 🎬 Кодек ${preferredCodec.toUpperCase()} применён (PT: ${preferredPTs.join(', ')})`);
+        return filteredLines.join('\r\n');
+    }
+
+    // === ОГРАНИЧЕНИЕ БИТРЕЙТА (SDP Bandwidth) ===
+    function modifySdpBandwidth(sdp, limitKbps) {
+        if (!limitKbps || limitKbps <= 0) return sdp;
+
+        const lines = sdp.split('\r\n');
+        const result = [];
+        let inVideoSection = false;
+        let bandwidthAdded = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('m=video')) {
+                inVideoSection = true;
+                bandwidthAdded = false;
+                result.push(lines[i]);
+                continue;
+            }
+            if (lines[i].startsWith('m=') && inVideoSection) {
+                inVideoSection = false;
+            }
+
+            // Удаляем существующие bandwidth строки в видео-секции
+            if (inVideoSection && (lines[i].startsWith('b=AS:') || lines[i].startsWith('b=TIAS:'))) {
+                continue;
+            }
+
+            // Вставляем лимит перед первым a= атрибутом
+            if (inVideoSection && !bandwidthAdded && lines[i].startsWith('a=')) {
+                result.push(`b=AS:${limitKbps}`);
+                result.push(`b=TIAS:${limitKbps * 1000}`);
+                bandwidthAdded = true;
+                console.log(`[Boosteroid Tweaks] 📡 Битрейт ограничен: ${limitKbps} Kbps`);
+            }
+
+            result.push(lines[i]);
+        }
+
+        return result.join('\r\n');
+    }
+
+    // Универсальная функция модификации SDP (кодек + битрейт)
+    function applySdpModifications(sdp) {
+        let modified = sdp;
+        if (settings.preferredCodec && settings.preferredCodec !== 'auto') {
+            modified = modifySdpCodecPreference(modified, settings.preferredCodec);
+        }
+        if (settings.bandwidthLimit && settings.bandwidthLimit > 0) {
+            modified = modifySdpBandwidth(modified, settings.bandwidthLimit);
+        }
+        return modified;
+    }
+
+    // 5. Легковесный перехват WebRTC для определения IP сервера и DataChannels (Anti-AFK)
     const setupRtcProxy = (RTCClass) => {
         if (!RTCClass) return null;
         return new Proxy(RTCClass, {
             construct(target, args) {
                 const pc = new target(...args);
+
+                // Перехват SDP для кодека и битрейта
+                const origSetRemote = pc.setRemoteDescription.bind(pc);
+                pc.setRemoteDescription = function(desc) {
+                    if (desc && desc.sdp) {
+                        try {
+                            // Диагностика: показываем доступные кодеки в SDP
+                            const codecs = [...desc.sdp.matchAll(/a=rtpmap:(\d+)\s+(\S+)/g)].map(m => m[2]);
+                            console.log(`[Boosteroid Tweaks] 📋 setRemoteDescription (${desc.type}), видео кодеки в SDP:`, codecs.filter(c => !c.includes('opus') && !c.includes('telephone')));
+                            const modified = applySdpModifications(desc.sdp);
+                            if (modified !== desc.sdp) desc = { type: desc.type, sdp: modified };
+                        } catch(e) { console.error('[Boosteroid Tweaks] SDP modify error:', e); }
+                    }
+                    return origSetRemote(desc);
+                };
+
+                const origSetLocal = pc.setLocalDescription.bind(pc);
+                pc.setLocalDescription = function(desc) {
+                    if (desc && desc.sdp) {
+                        try {
+                            const modified = applySdpModifications(desc.sdp);
+                            if (modified !== desc.sdp) desc = { type: desc.type, sdp: modified };
+                        } catch(e) { console.error('[Boosteroid Tweaks] SDP modify error:', e); }
+                    }
+                    return origSetLocal(desc);
+                };
                 
+                // Перехват DataChannels (созданных клиентом)
+                const originalCreateDataChannel = pc.createDataChannel;
+                if (originalCreateDataChannel) {
+                    pc.createDataChannel = function() {
+                        const channel = originalCreateDataChannel.apply(this, arguments);
+                        setupDataChannelInterceptor(channel);
+                        return channel;
+                    };
+                }
+
+                // Перехват DataChannels (созданных сервером)
+                const originalAddEventListener = pc.addEventListener;
+                if (originalAddEventListener) {
+                    pc.addEventListener = function(type, listener, options) {
+                        if (type === 'datachannel' && typeof listener === 'function') {
+                            const wrappedListener = function(evt) {
+                                if (evt.channel) {
+                                    setupDataChannelInterceptor(evt.channel);
+                                }
+                                return listener.call(this, evt);
+                            };
+                            return originalAddEventListener.call(this, type, wrappedListener, options);
+                        }
+                        return originalAddEventListener.call(this, type, listener, options);
+                    };
+                }
+                
+                const dcDescriptor = Object.getOwnPropertyDescriptor(target.prototype, 'ondatachannel');
+                if (dcDescriptor) {
+                    Object.defineProperty(pc, 'ondatachannel', {
+                        get: function() { return dcDescriptor.get ? dcDescriptor.get.call(this) : this.__btOnDataChannel; },
+                        set: function(handler) {
+                            this.__btOnDataChannel = handler;
+                            const wrappedHandler = function(evt) {
+                                if (evt.channel) {
+                                    setupDataChannelInterceptor(evt.channel);
+                                }
+                                return handler ? handler.call(this, evt) : null;
+                            };
+                            if (dcDescriptor.set) {
+                                dcDescriptor.set.call(this, wrappedHandler);
+                            } else if (originalAddEventListener) {
+                                originalAddEventListener.call(this, 'datachannel', wrappedHandler);
+                            }
+                        }
+                    });
+                }
+
                 let checkInterval = setInterval(async () => {
                     const state = pc.connectionState || pc.iceConnectionState;
                     if (state === 'connected') {
@@ -224,7 +573,7 @@
                                         if (ip && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.endsWith('.local') && ip !== lastServerIp) {
                                             lastServerIp = ip;
                                             console.log(`[Boosteroid Tweaks] 📡 WebRTC IP сервера обнаружен: ${ip}`);
-                                            if (window.renderPanelGlobal) window.renderPanelGlobal();
+                                            if (_w.renderPanelGlobal) _w.renderPanelGlobal();
                                             clearInterval(checkInterval); // IP найден, прекращаем проверки
                                         }
                                     }
@@ -241,12 +590,12 @@
         });
     };
 
-    if (window.RTCPeerConnection) {
-        window.RTCPeerConnection = setupRtcProxy(window.RTCPeerConnection);
+    if (_w.RTCPeerConnection) {
+        _w.RTCPeerConnection = setupRtcProxy(_w.RTCPeerConnection);
     }
-    if (window.webkitRTCPeerConnection && !window.webkitRTCPeerConnection.__btProxied) {
-        window.webkitRTCPeerConnection = setupRtcProxy(window.webkitRTCPeerConnection);
-        window.webkitRTCPeerConnection.__btProxied = true;
+    if (_w.webkitRTCPeerConnection && !_w.webkitRTCPeerConnection.__btProxied) {
+        _w.webkitRTCPeerConnection = setupRtcProxy(_w.webkitRTCPeerConnection);
+        _w.webkitRTCPeerConnection.__btProxied = true;
     }
 
     // === ANTI-AFK ===
@@ -257,7 +606,7 @@
     if (originalGetGamepads) {
         navigator.getGamepads = function () {
             const gamepads = originalGetGamepads();
-            if (settings.antiAfk && fakeGamepadActive) {
+            if (settings.antiAfkMode === 'intercept' && fakeGamepadActive) {
                 const pads = Array.from(gamepads);
                 if (!pads[0]) {
                     pads[0] = {
@@ -282,7 +631,7 @@
     // 2. Блокировка событий потери фокуса (чтобы Boosteroid не открывал меню при Alt-Tab)
     ['blur', 'visibilitychange', 'pagehide', 'mouseout', 'mouseleave'].forEach(evt => {
         window.addEventListener(evt, (e) => {
-            if (settings.antiAfk) {
+            if (settings.antiAfkMode !== 'off') {
                 e.stopImmediatePropagation();
                 e.stopPropagation();
             }
@@ -291,26 +640,26 @@
 
     const originalHidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
     const originalVisibility = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
-    const originalHasFocus = Object.getOwnPropertyDescriptor(Document.prototype, 'hasFocus');
+    const originalHasFocus = Document.prototype.hasFocus;
 
     if (originalHidden) {
         Object.defineProperty(document, 'hidden', {
-            get: function () { return settings.antiAfk ? false : originalHidden.get.call(this); }
+            get: function () { return settings.antiAfkMode !== 'off' ? false : originalHidden.get.call(this); }
         });
     }
     if (originalVisibility) {
         Object.defineProperty(document, 'visibilityState', {
-            get: function () { return settings.antiAfk ? 'visible' : originalVisibility.get.call(this); }
+            get: function () { return settings.antiAfkMode !== 'off' ? 'visible' : originalVisibility.get.call(this); }
         });
     }
     if (originalHasFocus) {
-        Object.defineProperty(document, 'hasFocus', {
-            get: function () { return settings.antiAfk ? true : originalHasFocus.get.call(this); }
-        });
+        document.hasFocus = function() {
+            return settings.antiAfkMode !== 'off' ? true : originalHasFocus.call(document);
+        };
     }
 
     setInterval(() => {
-        if (!settings.antiAfk) return;
+        if (settings.antiAfkMode !== 'intercept') return;
 
         // Активируем подмену геймпада на полсекунды
         fakeGamepadActive = true;
@@ -322,7 +671,7 @@
         if (streamTarget) {
             const rect = streamTarget.getBoundingClientRect();
             const opts = {
-                view: window, bubbles: true, cancelable: true,
+                view: null, bubbles: true, cancelable: true,
                 clientX: rect.width / 2, clientY: rect.height / 2
             };
 
@@ -338,7 +687,88 @@
         }
     }, 120000); // Каждые 2 минуты
 
+    // Новый режим: F15
+    setInterval(() => {
+        if (settings.antiAfkMode !== 'f15') return;
+        
+        const streamTarget = document.querySelector('canvas') || document.querySelector('video') || document.body;
+        if (streamTarget) {
+            const keyOpts = { key: 'F15', code: 'F15', keyCode: 126, bubbles: true, cancelable: true };
+            streamTarget.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+            setTimeout(() => streamTarget.dispatchEvent(new KeyboardEvent('keyup', keyOpts)), 50);
+            
+            // На всякий случай отправляем и на document
+            document.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+            setTimeout(() => document.dispatchEvent(new KeyboardEvent('keyup', keyOpts)), 50);
+
+            console.log('[Boosteroid Tweaks] ⌨️ F15 key dispatched (Anti-AFK F15 Mode).');
+        }
+    }, 420000); // Каждые 7 минут
+
     // 3. Авто-клик удален. Теперь используется перехват WebSocket (см. выше), что на 100% надежнее.
+
+    // 4. Fallback Auto-clicker
+    // Если сетевой перехват не сработал (например, данные зашифрованы или Boosteroid изменил протокол),
+    // мы обнаружим появление окна в DOM и нажмем кнопку "Я ВСЕ ЕЩЕ ЗДЕСЬ"
+    const afkObserver = new MutationObserver((mutations) => {
+        if (settings.antiAfkMode === 'off' && !settings.skipExitScreen) return;
+
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Ищем кнопки только внутри добавленного узла, чтобы не вешать браузер
+                    let buttons = [];
+                    if (node.matches && node.matches('button, div[role="button"], .session-poll-start-btn')) {
+                        buttons.push(node);
+                    }
+                    if (node.querySelectorAll) {
+                        const childButtons = node.querySelectorAll('button, div[role="button"], .session-poll-start-btn');
+                        childButtons.forEach(b => buttons.push(b));
+                    }
+
+                    for (const btn of buttons) {
+                        // Anti-AFK
+                        if (settings.antiAfkMode !== 'off') {
+                            const text = (btn.innerText || btn.textContent || '').toUpperCase();
+                            if (text.includes('I AM STILL HERE') || 
+                                text.includes("I'M STILL HERE") || 
+                                text.includes('Я ВСЕ ЕЩЕ ЗДЕСЬ') || 
+                                text.includes('Я ТУТ') ||
+                                text.includes('Я ЩЕ ТУТ') ||
+                                text.includes('STILL HERE')) {
+                                console.log('[Boosteroid Tweaks] 🖱️ Окно AFK появилось. Авто-клик по кнопке!');
+                                btn.click();
+                                return; // Выходим из обсервера
+                            }
+                        }
+
+                        // Skip Exit Screen
+                        if (settings.skipExitScreen && btn.classList && btn.classList.contains('session-poll-start-btn')) {
+                            console.log('[Boosteroid Tweaks] 🚀 Пропускаем экран выхода (авто-клик "ДОМОЙ").');
+                            btn.click();
+                            return; // Выходим из обсервера
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Инжектим стиль для скрытия окна выхода, если включено
+    if (settings.skipExitScreen && document.documentElement) {
+        const hideStyle = document.createElement('style');
+        hideStyle.textContent = '.session-poll-wrapper { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }';
+        document.documentElement.appendChild(hideStyle);
+    }
+
+    // Запускаем обсервер для body
+    if (document.body) {
+        afkObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            afkObserver.observe(document.body, { childList: true, subtree: true });
+        });
+    }
 
     // === АВТОДЕТЕКТ СЕРВЕРА ЧЕРЕЗ ГЛОБАЛЫ BOOSTEROID (фолбэк) ===
     // Если перехват WS/Fetch/XHR не поймал имя сервера,
@@ -346,7 +776,7 @@
     function discoverServerFromGlobals() {
         try {
             // JANUS_HELPER.server = "https://gw-xxx.boosteroid.com/janus"
-            const janusServer = window.JANUS_HELPER && window.JANUS_HELPER.server;
+            const janusServer = _w.JANUS_HELPER && _w.JANUS_HELPER.server;
             if (janusServer) {
                 const url = new URL(janusServer);
                 checkAndSetServer(url.hostname, janusServer);
@@ -355,7 +785,7 @@
 
         try {
             // WebRtcTransport.serverBaseUrl = "https://gw-xxx.boosteroid.com/webrtc"
-            const wrtUrl = window.WebRtcTransport && window.WebRtcTransport.serverBaseUrl;
+            const wrtUrl = _w.WebRtcTransport && _w.WebRtcTransport.serverBaseUrl;
             if (wrtUrl) {
                 const url = new URL(wrtUrl);
                 checkAndSetServer(url.hostname, wrtUrl);
@@ -364,7 +794,7 @@
 
         try {
             // SessionHandler.parsePings[0].address = "https://gw-xxx.cloud.boosteroid.com:443"
-            const pings = window.SessionHandler && window.SessionHandler.parsePings;
+            const pings = _w.SessionHandler && _w.SessionHandler.parsePings;
             if (pings && pings.length > 0 && pings[0].address) {
                 const url = new URL(pings[0].address);
                 checkAndSetServer(url.hostname, pings[0].address);
@@ -382,7 +812,7 @@
 
     // === ПОЛЬЗОВАТЕЛЬСКИЙ ИНТЕРФЕЙС ===
     function initUI() {
-        if (window.location.hostname !== 'cloud.boosteroid.com') return;
+        if (_w.location.hostname !== 'cloud.boosteroid.com') return;
         if (document.getElementById('boosteroid-tweaks-container')) return;
 
         const container = document.createElement('div');
@@ -487,6 +917,47 @@
             input:checked + .slider:before {
                 transform: translateX(20px);
             }
+            /* Segmented Control Slider */
+            .segmented-control {
+                position: relative;
+                display: flex;
+                background-color: #333;
+                border-radius: 8px;
+                padding: 3px;
+                width: 170px;
+                height: 26px;
+            }
+            .segmented-control input {
+                display: none;
+            }
+            .segmented-control label {
+                flex: 1;
+                text-align: center;
+                line-height: 26px;
+                font-size: 12px;
+                color: #aaa;
+                cursor: pointer;
+                z-index: 2;
+                transition: color 0.3s ease;
+            }
+            .segmented-control input:checked + label {
+                color: white;
+                font-weight: bold;
+            }
+            .segmented-bg {
+                position: absolute;
+                top: 3px;
+                left: 3px;
+                bottom: 3px;
+                width: calc(33.33% - 2px);
+                background-color: #ff0055;
+                border-radius: 6px;
+                z-index: 1;
+                transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            }
+            #afk-off:checked ~ .segmented-bg { transform: translateX(0); background-color: #555; }
+            #afk-net:checked ~ .segmented-bg { transform: translateX(100%); }
+            #afk-f15:checked ~ .segmented-bg { transform: translateX(200%); }
             
             /* Server List */
             .server-list-container {
@@ -563,13 +1034,49 @@
                 
                 <div class="setting-row">
                     <label>${t('antiAfk')}</label>
+                    <div class="segmented-control">
+                        <input type="radio" name="antiAfkMode" id="afk-off" value="off" ${settings.antiAfkMode === 'off' ? 'checked' : ''}>
+                        <label for="afk-off">${t('afkOff')}</label>
+                        
+                        <input type="radio" name="antiAfkMode" id="afk-net" value="intercept" ${settings.antiAfkMode === 'intercept' ? 'checked' : ''}>
+                        <label for="afk-net">${t('afkNet')}</label>
+                        
+                        <input type="radio" name="antiAfkMode" id="afk-f15" value="f15" ${settings.antiAfkMode === 'f15' ? 'checked' : ''}>
+                        <label for="afk-f15">${t('afkF15')}</label>
+                        
+                        <div class="segmented-bg"></div>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <label>${t('codec')}</label>
+                    <select id="bt-codec" style="background: #2a2a2a; color: white; border: 1px solid #555; border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer; font-size: 13px;">
+                        <option value="auto" ${settings.preferredCodec === 'auto' ? 'selected' : ''}>${t('codecAuto')}</option>
+                        <option value="h265" ${settings.preferredCodec === 'h265' ? 'selected' : ''}>H.265 (HEVC)</option>
+                        <option value="h264" ${settings.preferredCodec === 'h264' ? 'selected' : ''}>H.264</option>
+                        <option value="av1" ${settings.preferredCodec === 'av1' ? 'selected' : ''}>AV1</option>
+                    </select>
+                </div>
+
+                <div class="setting-row">
+                    <label>${t('bandwidth')}</label>
+                    <select id="bt-bandwidth" style="background: #2a2a2a; color: white; border: 1px solid #555; border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer; font-size: 13px;">
+                        <option value="0" ${!settings.bandwidthLimit ? 'selected' : ''}>${t('bwUnlimited')}</option>
+                        <option value="256" ${settings.bandwidthLimit === 256 ? 'selected' : ''}>256 Kbps</option>
+                        <option value="512" ${settings.bandwidthLimit === 512 ? 'selected' : ''}>512 Kbps</option>
+                        <option value="1000" ${settings.bandwidthLimit === 1000 ? 'selected' : ''}>1 Mbps</option>
+                        <option value="2000" ${settings.bandwidthLimit === 2000 ? 'selected' : ''}>2 Mbps</option>
+                        <option value="3000" ${settings.bandwidthLimit === 3000 ? 'selected' : ''}>3 Mbps</option>
+                    </select>
+                </div>
+
+                <div class="setting-row">
+                    <label>${t('skipExit')}</label>
                     <label class="switch">
-                        <input type="checkbox" id="bt-antiafk" ${settings.antiAfk ? 'checked' : ''}>
+                        <input type="checkbox" id="bt-skipexit" ${settings.skipExitScreen ? 'checked' : ''}>
                         <span class="slider"></span>
                     </label>
                 </div>
-
-
 
                 <div class="setting-row" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px; background: #2a2a2a; padding: 10px; border-radius: 8px;">
                     <label style="margin-bottom: 5px; font-size: 13px; color: #bbb;">${t('lastServer')}</label>
@@ -605,12 +1112,30 @@
                 renderPanel();
             });
 
-            panel.querySelector('#bt-antiafk').addEventListener('change', (e) => {
-                settings.antiAfk = e.target.checked;
-                saveSettings();
+            panel.querySelectorAll('input[name="antiAfkMode"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    settings.antiAfkMode = e.target.value;
+                    saveSettings();
+                });
             });
 
+            panel.querySelector('#bt-codec').addEventListener('change', (e) => {
+                settings.preferredCodec = e.target.value;
+                saveSettings();
+                console.log(`[Boosteroid Tweaks] 🎬 Кодек изменён на: ${e.target.value.toUpperCase()}. Перезапустите игру для применения.`);
+            });
 
+            panel.querySelector('#bt-bandwidth').addEventListener('change', (e) => {
+                settings.bandwidthLimit = parseInt(e.target.value);
+                saveSettings();
+                console.log(`[Boosteroid Tweaks] 📡 Лимит битрейта: ${e.target.value === '0' ? 'без ограничений' : e.target.value + ' Kbps'}. Перезапустите игру для применения.`);
+            });
+
+            panel.querySelector('#bt-skipexit').addEventListener('change', (e) => {
+                settings.skipExitScreen = e.target.checked;
+                saveSettings();
+                console.log(`[Boosteroid Tweaks] 🚀 Пропуск окна выхода: ${settings.skipExitScreen ? 'ВКЛ' : 'ВЫКЛ'}. Обновите страницу для применения скрытия.`);
+            });
 
             const blockLastBtn = panel.querySelector('#block-last-btn');
             if (blockLastBtn) {
@@ -645,7 +1170,7 @@
             });
         };
 
-        window.renderPanelGlobal = renderPanel;
+        _w.renderPanelGlobal = renderPanel;
 
         renderPanel();
 

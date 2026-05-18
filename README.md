@@ -8,17 +8,14 @@ The script adds capabilities for server management, robust protection against in
 
 ## ✨ Features & Advantages
 
-*   **🛡️ Invisible Anti-AFK (Idle Disconnect Protection)**
-    Forget about "Are you still there?" warnings and the 10-minute timeout. The script intercepts activity requests from Boosteroid directly at the network socket layer (WebSocket) and instantly replies to the server. The warning dialog doesn't even appear on your screen! Perfect for long gaming sessions or using Steam Remote Play.
+*   **🛡️ Multi-Mode Anti-AFK (Idle Disconnect Protection)**
+    Forget about "Are you still there?" warnings and the 10-minute timeout. Features three modes: 'Off', 'Network Intercept' (instant socket replies without dialogs), and 'F15 Simulation' (safe hardware key simulation). Perfect for long gaming sessions or using Steam Remote Play.
 *   **🌍 Server Manager (Lagging Data Center Blocker)**
     Ended up on a server with high ping or poor quality? The script automatically detects your current server and allows you to add it to a "blacklist". Next time you launch a game, the script will block the connection to the unwanted server, forcing Boosteroid to reroute you to a different data center.
-*   **📊 Advanced Statistics (Better Stats)**
-    A built-in overlay (similar to Steam or GeForce Experience FPS counters) that displays in real-time:
-    *   **Ping (ms)** — latency to the server
-    *   **FPS** — video stream framerate
-    *   **Bitrate** — current network bitrate (Mbps)
-    *   **Loss** — packet loss (affects freezes)
-    *   **Resolution** — actual video stream resolution
+*   **🎬 Video Codec Selector & Bitrate Limiter**
+    Force your preferred video stream codec (H.265/HEVC, H.264, or AV1) and set a custom maximum bitrate via SDP manipulation to improve stream stability on slow networks.
+*   **🚀 Skip Exit Screen**
+    Automatically skips the post-game rating and feedback screen to immediately return you to the home menu.
 *   **🎨 Clean UI**
     Settings are accessible by clicking the gear icon and are embedded directly into the Boosteroid page using Shadow DOM technology (which guarantees no conflicts with the site's own design).
 *   **🌐 Multi-language**
