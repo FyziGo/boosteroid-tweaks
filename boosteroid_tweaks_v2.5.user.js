@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Boosteroid Tweaks
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.5
 // @description  Блокировка серверов и Anti-AFK (Steam Remote Play) для Boosteroid
 // @author       You
 // @match        *://*.boosteroid.com/*
@@ -24,7 +24,6 @@
         antiAfkMode: 'off',
         preferredCodec: 'auto',
         bandwidthLimit: 0,
-        resolution: 'auto',
         blockedServers: [],
         language: '',
         skipExitScreen: false
@@ -43,10 +42,10 @@
     }
 
     const i18n = {
-        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK Mode', afkOff: 'Off', afkNet: 'Net', afkF15: 'F15', codec: 'Video Codec', codecAuto: 'Auto', bandwidth: 'Bitrate Limit', bwUnlimited: 'Unlimited', resTitle: 'Resolution', resAuto: 'Auto (Native)', res1080p: '1080p (FHD)', res1440p: '1440p (2K)', res4k: '2160p (4K)', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add', skipExit: 'Skip Exit Screen' },
-        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Выкл', afkNet: 'Сеть', afkF15: 'F15', codec: 'Видеокодек', codecAuto: 'Авто', bandwidth: 'Лимит битрейта', bwUnlimited: 'Без ограничений', resTitle: 'Разрешение', resAuto: 'Авто (Родное)', res1080p: '1080p (FHD)', res1440p: '1440p (2K)', res4k: '2160p (4K)', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить', skipExit: 'Пропускать окно выхода' },
-        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Вимк', afkNet: 'Мережа', afkF15: 'F15', codec: 'Відеокодек', codecAuto: 'Авто', bandwidth: 'Ліміт бітрейту', bwUnlimited: 'Без обмежень', resTitle: 'Роздільна здатність', resAuto: 'Авто (Рідна)', res1080p: '1080p (FHD)', res1440p: '1440p (2K)', res4k: '2160p (4K)', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати', skipExit: 'Пропускати вікно виходу' },
-        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Modo Anti-AFK', afkOff: 'Apag', afkNet: 'Red', afkF15: 'F15', codec: 'Códec de video', codecAuto: 'Auto', bandwidth: 'Límite de bitrate', bwUnlimited: 'Sin límite', resTitle: 'Resolución', resAuto: 'Auto (Nativa)', res1080p: '1080p (FHD)', res1440p: '1440p (2K)', res4k: '2160p (4K)', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir', skipExit: 'Omitir pantalla de salida' }
+        'en': { title: 'Boosteroid Tweaks', antiAfk: 'Anti-AFK Mode', afkOff: 'Off', afkNet: 'Net', afkF15: 'F15', codec: 'Video Codec', codecAuto: 'Auto', bandwidth: 'Bitrate Limit', bwUnlimited: 'Unlimited', lastServer: 'Last server (auto-detect):', waiting: 'Waiting...', block: 'Block', blockedList: 'Blocked servers (IP or domain):', placeholder: 'e.g. sh1.boosteroid.com', add: 'Add', skipExit: 'Skip Exit Screen' },
+        'ru': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Выкл', afkNet: 'Сеть', afkF15: 'F15', codec: 'Видеокодек', codecAuto: 'Авто', bandwidth: 'Лимит битрейта', bwUnlimited: 'Без ограничений', lastServer: 'Последний сервер (автоопределение):', waiting: 'Ожидание...', block: 'Блок', blockedList: 'Заблокированные сервера (IP или домен):', placeholder: 'Например: sh1.boosteroid.com', add: 'Добавить', skipExit: 'Пропускать окно выхода' },
+        'uk': { title: 'Boosteroid Tweaks', antiAfk: 'Режим Anti-AFK', afkOff: 'Вимк', afkNet: 'Мережа', afkF15: 'F15', codec: 'Відеокодек', codecAuto: 'Авто', bandwidth: 'Ліміт бітрейту', bwUnlimited: 'Без обмежень', lastServer: 'Останній сервер (автовизначення):', waiting: 'Очікування...', block: 'Блок', blockedList: 'Заблоковані сервери (IP або домен):', placeholder: 'Наприклад: sh1.boosteroid.com', add: 'Додати', skipExit: 'Пропускати вікно виходу' },
+        'es': { title: 'Boosteroid Tweaks', antiAfk: 'Modo Anti-AFK', afkOff: 'Apag', afkNet: 'Red', afkF15: 'F15', codec: 'Códec de video', codecAuto: 'Auto', bandwidth: 'Límite de bitrate', bwUnlimited: 'Sin límite', lastServer: 'Último servidor (autodetectado):', waiting: 'Esperando...', block: 'Bloquear', blockedList: 'Servidores bloqueados (IP o dominio):', placeholder: 'Ejemplo: sh1.boosteroid.com', add: 'Añadir', skipExit: 'Omitir pantalla de salida' }
     };
 
     let currentLang = settings.language;
@@ -70,51 +69,6 @@
         const href = window.location.href.toLowerCase();
         return path.includes('streaming.html') || href.includes('sessionid=');
     }
-
-    // === HOOK RESOLUTION ===
-    function applyResolutionHook() {
-        if (!settings.resolution || settings.resolution === 'auto') return;
-        
-        const resParts = settings.resolution.split('x');
-        if (resParts.length !== 2) return;
-        
-        const width = parseInt(resParts[0]);
-        const height = parseInt(resParts[1]);
-        if (!width || !height) return;
-
-        // Определяем pixelRatio
-        const pixelRatio = width >= 3840 ? 2 : (width >= 2560 ? 1.5 : 1);
-
-        try {
-            Object.defineProperty(_w, 'screen', {
-                get: function () {
-                    return {
-                        width: width,
-                        height: height,
-                        availWidth: width,
-                        availHeight: height,
-                        availLeft: 0,
-                        availTop: 0,
-                        colorDepth: 30,
-                        isExtended: false,
-                        pixelDepth: 30,
-                        orientation: { type: 'landscape-primary', angle: 0 }
-                    };
-                },
-                configurable: true
-            });
-
-            Object.defineProperty(_w, 'devicePixelRatio', {
-                get: () => pixelRatio,
-                configurable: true
-            });
-
-            console.log(`[Boosteroid Tweaks] 🖥️ Разрешение принудительно установлено: ${width}x${height} @${pixelRatio}x`);
-        } catch (e) {
-            console.error('[Boosteroid Tweaks] Ошибка хука разрешения:', e);
-        }
-    }
-    applyResolutionHook();
 
     // === ПЕРЕХВАТ СЕТИ (БЛОКИРОВКА И АВТОДЕТЕКТ СЕРВЕРОВ) ===
     
@@ -271,10 +225,9 @@
 
 
 
-    // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid и подмены конфигурации кодека)
+    // 3. Перехват Fetch API (для нового WebRTC движка Boosteroid)
     const originalFetch = _w.fetch;
     _w.fetch = async function () {
-        let isConfigUrl = false;
         try {
             const req = arguments[0];
             const url = typeof req === 'string' ? req : (req instanceof Request ? req.url : '');
@@ -289,68 +242,9 @@
                 }
 
                 checkAndSetServer(host, url);
-
-                if (url.includes('/configuration') || url.includes('/session') || url.includes('/streaming')) {
-                    isConfigUrl = true;
-                }
             }
         } catch(e) {}
-
-        const response = await originalFetch.apply(this, arguments);
-
-        if (isConfigUrl && response.ok && settings.preferredCodec !== 'auto') {
-            try {
-                const clonedResponse = response.clone();
-                const config = await clonedResponse.json();
-
-                if (config) {
-                    if (!config.clientStreamingConfigOverrides) {
-                        config.clientStreamingConfigOverrides = '{}';
-                    }
-
-                    let overrides = {};
-                    try {
-                        overrides = JSON.parse(config.clientStreamingConfigOverrides);
-                    } catch (e) {
-                        overrides = {};
-                    }
-
-                    // Принудительно устанавливаем кодек и аппаратное ускорение для бэкенда Boosteroid
-                    overrides.videoConfiguration = overrides.videoConfiguration || {};
-                    overrides.videoConfiguration.enableHardwareDecoding = true;
-                    overrides.videoConfiguration.hardwareDecoderProfile = 'high';
-                    overrides.videoConfiguration.enableRtcStatsCollection = true;
-                    
-                    let backendCodec = settings.preferredCodec;
-                    // Бэкенд Boosteroid часто использует 'hevc' вместо 'h265'
-                    if (backendCodec === 'h265') backendCodec = 'hevc'; 
-                    
-                    overrides.videoConfiguration.preferredCodec = backendCodec;
-
-                    // Установка битрейта на уровне бэкенда
-                    if (settings.bandwidthLimit && settings.bandwidthLimit > 0) {
-                        overrides.bitrateConfiguration = overrides.bitrateConfiguration || {};
-                        const limitBps = settings.bandwidthLimit * 1000;
-                        overrides.bitrateConfiguration.maxBitrate = limitBps;
-                        overrides.bitrateConfiguration.targetBitrate = Math.floor(limitBps * 0.8);
-                    }
-
-                    config.clientStreamingConfigOverrides = JSON.stringify(overrides);
-
-                    console.log(`[Boosteroid Tweaks] 🎬 Fetch Interceptor: конфиг потока изменен, кодек установлен на ${backendCodec.toUpperCase()}`);
-
-                    return new Response(JSON.stringify(config), {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: response.headers
-                    });
-                }
-            } catch (e) {
-                // Если парсинг не удался (например, это не JSON), просто возвращаем оригинальный ответ
-            }
-        }
-
-        return response;
+        return originalFetch.apply(this, arguments);
     };
 
     // 4. Перехват XMLHttpRequest (на всякий случай)
@@ -1187,27 +1081,6 @@
 
         // Рендерим панель
         const renderPanel = () => {
-            const SUPPORTED_RESOLUTIONS = {
-                '16:9': [[3840, 2160], [3200, 1800], [3200, 1440], [2560, 1440], [2048, 1152], [1920, 1080], [1600, 900], [1366, 768], [1360, 768], [1280, 720]],
-                '16:10': [[3360, 2100], [3320, 2160], [2940, 1912], [2732, 2048], [2560, 1600], [2160, 1350], [2048, 1330], [2048, 1152], [1920, 1200], [1680, 1050], [1440, 900], [1280, 800]],
-                '21:9 (Ultrawide)': [[3440, 1440], [2560, 1080], [2400, 1080], [1920, 864], [1600, 720]],
-                '32:9 (Super Ultrawide)': [[3840, 1080]],
-                '2.37:1': [[1920, 810]],
-                '3:2': [[3000, 2000], [2256, 1504], [2160, 1440]],
-                '4:3': [[2048, 1536], [1920, 1536], [1800, 1350], [1600, 1200], [1440, 1152], [1400, 1050], [1280, 960], [1152, 864], [1024, 768], [800, 600]],
-                '5:4': [[2560, 2048], [1600, 1024], [1280, 1024]]
-            };
-
-            let resOptionsHtml = `<option value="auto" ${settings.resolution === 'auto' ? 'selected' : ''}>${t('resAuto')}</option>`;
-            for (const [group, resList] of Object.entries(SUPPORTED_RESOLUTIONS)) {
-                resOptionsHtml += `<optgroup label="${group}">`;
-                resList.forEach(([w, h]) => {
-                    const val = `${w}x${h}`;
-                    resOptionsHtml += `<option value="${val}" ${settings.resolution === val ? 'selected' : ''}>${w}x${h}</option>`;
-                });
-                resOptionsHtml += `</optgroup>`;
-            }
-
             panel.innerHTML = `
                 <div class="panel-header">
                     <h2 style="margin: 0; border: none; padding: 0;">${t('title')}</h2>
@@ -1242,13 +1115,6 @@
                         <option value="h265" ${settings.preferredCodec === 'h265' ? 'selected' : ''}>H.265 (HEVC)</option>
                         <option value="h264" ${settings.preferredCodec === 'h264' ? 'selected' : ''}>H.264</option>
                         <option value="av1" ${settings.preferredCodec === 'av1' ? 'selected' : ''}>AV1</option>
-                    </select>
-                </div>
-
-                <div class="setting-row">
-                    <label>${t('resTitle')}</label>
-                    <select id="bt-resolution" style="background: #2a2a2a; color: white; border: 1px solid #555; border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer; font-size: 13px;">
-                        ${resOptionsHtml}
                     </select>
                 </div>
 
@@ -1317,12 +1183,6 @@
                 settings.preferredCodec = e.target.value;
                 saveSettings();
                 console.log(`[Boosteroid Tweaks] 🎬 Кодек изменён на: ${e.target.value.toUpperCase()}. Перезапустите игру для применения.`);
-            });
-
-            panel.querySelector('#bt-resolution').addEventListener('change', (e) => {
-                settings.resolution = e.target.value;
-                saveSettings();
-                console.log(`[Boosteroid Tweaks] 🖥️ Разрешение изменено на: ${e.target.value.toUpperCase()}. Обновите страницу для применения.`);
             });
 
             panel.querySelector('#bt-bandwidth').addEventListener('change', (e) => {
